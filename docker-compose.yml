@@ -1,0 +1,27 @@
+services:
+
+  reply-api:
+    image: chatroom-reply-api:latest
+    build:
+      context: ./Reply.API
+      dockerfile: Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Data Source=host.docker.internal,1433;Database=chatReply;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;Encrypt=True"
+    ports:
+      - "${REPLY_API_PORT:-5025}:8080"
+
+  thread-api:
+    image: chatroom-thread-api:latest
+    build:
+      context: ./Thread.API
+      dockerfile: Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Data Source=host.docker.internal,1433;Database=chatReply;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;Encrypt=True"
+      ReplyApi__BaseAddress: http://reply-api:8080/
+    ports:
+      - "${THREAD_API_PORT:-5026}:8080"
+    depends_on:
+      reply-api:
+        condition: service_started
