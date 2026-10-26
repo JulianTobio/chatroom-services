@@ -11,6 +11,7 @@
 TestResults/
 
 # Local configuration and secrets
+.env
 appsettings.*.local.json
 secrets.json
 
