@@ -18,10 +18,22 @@ services:
       dockerfile: Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__DefaultConnection: "Data Source=host.docker.internal,1433;Database=chatReply;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;Encrypt=True"
+      ConnectionStrings__DefaultConnection: "Data Source=host.docker.internal,1433;Database=chatThread;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;Encrypt=True"
       ReplyApi__BaseAddress: http://reply-api:8080/
+      Cors__AllowedOrigins__0: "http://localhost:${CHATROOM_PORT:-5017}"
     ports:
       - "${THREAD_API_PORT:-5026}:8080"
     depends_on:
       reply-api:
+        condition: service_started
+
+  chatroom:
+    image: chatroom-web:latest
+    build:
+      context: ./ChatRoom
+      dockerfile: Dockerfile
+    ports:
+      - "${CHATROOM_PORT:-5017}:80"
+    depends_on:
+      thread-api:
         condition: service_started

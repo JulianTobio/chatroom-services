@@ -1,0 +1,139 @@
+﻿@page "/"
+@inject IThreadApiClient ThreadApi
+
+<PageTitle>Hilos | ChatRoom</PageTitle>
+
+<MudStack Spacing="5">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="page-heading">
+        <div>
+            <MudText Typo="Typo.overline" Color="Color.Primary">CONVERSACIONES</MudText>
+            <MudText Typo="Typo.h3" Class="heading-title">Hilos recientes</MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary">Explora lo que está hablando la comunidad.</MudText>
+        </div>
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Refresh"
+                   OnClick="RefreshThreads">
+            Actualizar
+        </MudButton>
+    </MudStack>
+
+    @if (_loadError is not null)
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" ShowCloseIcon="true">
+            @_loadError
+        </MudAlert>
+    }
+
+    <MudPaper Elevation="0" Outlined="true" Class="threads-panel">
+        <MudTable @ref="_table"
+                  T="ThreadItem"
+                  ServerData="LoadThreads"
+                  Dense="true"
+                  Hover="true"
+                  LoadingProgressColor="Color.Primary"
+                  RowsPerPage="10"
+                  Breakpoint="Breakpoint.Sm"
+                  Class="threads-table">
+            <HeaderContent>
+                <MudTh>Hilo</MudTh>
+                <MudTh>Autor</MudTh>
+                <MudTh>Creado</MudTh>
+                <MudTh Class="text-end">Respuestas</MudTh>
+                <MudTh>Última respuesta</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Hilo">
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.subtitle1" Class="thread-title">@context.Title</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="thread-description">
+                            @context.Description
+                        </MudText>
+                    </MudStack>
+                </MudTd>
+                <MudTd DataLabel="Autor">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">#@context.Author</MudChip>
+                </MudTd>
+                <MudTd DataLabel="Creado">@FormatDate(context.Created)</MudTd>
+                <MudTd DataLabel="Respuestas" Class="text-end">
+                    <MudChip T="string"
+                             Size="Size.Small"
+                             Color="@(context.ReplyCount > 0 ? Color.Primary : Color.Default)"
+                             Variant="Variant.Filled">
+                        @context.ReplyCount
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Última respuesta">
+                    @(context.LastReplyTimestamp is DateTime lastReply ? FormatDate(lastReply) : "Sin respuestas")
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                @if (_loadError is null)
+                {
+                    <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="empty-state">
+                        <MudIcon Icon="@Icons.Material.Outlined.Forum" Size="Size.Large" Color="Color.Secondary" />
+                        <MudText Typo="Typo.h6">Todavía no hay hilos</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Cuando se creen, aparecerán aquí.</MudText>
+                    </MudStack>
+                }
+            </NoRecordsContent>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 5, 10, 25, 50, 100 }"
+                               RowsPerPageString="Hilos por página"
+                               InfoFormat="{first_item}-{last_item} de {all_items}" />
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+</MudStack>
+
+@code {
+    private MudTable<ThreadItem>? _table;
+    private string? _loadError;
+
+    private async Task<TableData<ThreadItem>> LoadThreads(TableState state, CancellationToken cancellationToken)
+    {
+        _loadError = null;
+
+        try
+        {
+            PagedResult<ThreadItem>? page = await ThreadApi.GetPageAsync(
+                state.Page + 1,
+                state.PageSize,
+                cancellationToken);
+
+            return new TableData<ThreadItem>
+            {
+                Items = page.Items,
+                TotalItems = page.TotalCount
+            };
+        }
+        catch (HttpRequestException e)
+        {
+            Console.WriteLine($"Error al cargar los hilos: {e.Message}");
+            _loadError = "No se pudieron cargar los hilos. Comprueba que Thread.API esté en ejecución y disponible.";
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            _loadError = "Thread.API devolvió una respuesta que no se pudo interpretar.";
+            await InvokeAsync(StateHasChanged);
+        }
+
+        return new TableData<ThreadItem>
+        {
+            Items = [],
+            TotalItems = 0
+        };
+    }
+
+    private async Task RefreshThreads()
+    {
+        if (_table is not null)
+        {
+            await _table.ReloadServerData();
+        }
+    }
+
+    private static string FormatDate(DateTime date) =>
+        date.ToLocalTime().ToString("dd MMM yyyy, HH:mm");
+}

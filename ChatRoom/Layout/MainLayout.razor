@@ -1,0 +1,14 @@
+﻿@inherits LayoutComponentBase
+
+<MudLayout>
+    <MudAppBar Elevation="0" Color="Color.Surface" Class="chatroom-appbar">
+        <MudText Typo="Typo.h6" Class="brand-mark">ChatRoom</MudText>
+        <MudSpacer />
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Conversaciones de la comunidad</MudText>
+    </MudAppBar>
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.Large" Class="page-container">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>

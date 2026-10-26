@@ -5,6 +5,18 @@ using Thread.API.Service;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? throw new InvalidOperationException("Configure Cors:AllowedOrigins.");
+if (builder.Configuration["Cors:AllowedOrigins:0"] is { } frontendOrigin)
+{
+    allowedOrigins = [frontendOrigin];
+}
+
+builder.Services.AddCors(options =>
+    options.AddDefaultPolicy(policy =>
+        policy.WithOrigins(allowedOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod()));
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException(
@@ -32,6 +44,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseCors();
 app.UseAuthorization();
 app.MapControllers();
 

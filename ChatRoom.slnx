@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="Reply.API/Reply.API.csproj" />
   <Project Path="Thread.API/Thread.API.csproj" />
+  <Project Path="ChatRoom/ChatRoom.csproj" />
 </Solution>

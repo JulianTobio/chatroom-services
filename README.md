@@ -9,11 +9,14 @@
    docker compose up --build
    ```
 
-Compose inicia SQL Server, `Reply.API` y `Thread.API`. La base persistente se guarda en el volumen `sqlserver-data`.
+Compose inicia `Reply.API`, `Thread.API` y la aplicación `ChatRoom`. Las APIs se conectan a la instancia de SQL Server ya disponible en el host; la aplicación web consume `Thread.API`.
 
 - Reply.API: `http://localhost:5025`
 - Thread.API: `http://localhost:5026`
+- ChatRoom WebAssembly: `http://localhost:5017`
 - OpenAPI/Swagger en modo Development: `/openapi/v1.json` y `/swagger`
+
+La página principal consume la API paginada de `Thread.API`. Si se cambia `CHATROOM_PORT`, Compose configura el origen correspondiente en la política CORS de `Thread.API`.
 
 Los proyectos todavía requieren aplicar las migraciones antes de usar sus endpoints de base de datos. Con Docker Compose activo, configurar la conexión desde PowerShell y aplicar ambas:
 
