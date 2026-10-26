@@ -1,0 +1,49 @@
+@Thread.API_HostAddress = http://localhost:5026
+
+GET {{Thread.API_HostAddress}}/api/threads?pageNumber=1&pageSize=10
+Accept: application/json
+
+###
+
+POST {{Thread.API_HostAddress}}/api/threads
+Content-Type: application/json
+
+{
+  "title": "Example thread",
+  "description": "Thread description",
+  "author": 1
+}
+
+###
+
+GET {{Thread.API_HostAddress}}/api/threads/1
+Accept: application/json
+
+###
+
+PUT {{Thread.API_HostAddress}}/api/threads/1
+Content-Type: application/json
+
+{
+  "title": "Updated thread",
+  "description": "Updated thread description",
+  "author": 1
+}
+
+###
+
+DELETE {{Thread.API_HostAddress}}/api/threads/1
+
+###
+
+POST {{Thread.API_HostAddress}}/api/threads/1/replies
+Content-Type: application/json
+
+{
+  "content": "A reply to this thread",
+  "userId": 1
+}
+
+###
+
+DELETE {{Thread.API_HostAddress}}/api/threads/1/replies/1

@@ -1,0 +1,6 @@
+@Reply.API_HostAddress = http://localhost:5025
+
+GET {{Reply.API_HostAddress}}/api/replies/topic/1?pageNumber=1&pageSize=10
+Accept: application/json
+
+###
