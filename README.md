@@ -16,7 +16,7 @@ Compose inicia `Reply.API`, `Thread.API` y la aplicación `ChatRoom`. Las APIs s
 - ChatRoom WebAssembly: `http://localhost:5017`
 - OpenAPI/Swagger en modo Development: `/openapi/v1.json` y `/swagger`
 
-La página principal consume la API paginada de `Thread.API`. Si se cambia `CHATROOM_PORT`, Compose configura el origen correspondiente en la política CORS de `Thread.API`.
+La página principal consume la API paginada de `Thread.API`. Cada hilo abre su vista de conversación (`/threads/{id}`), que muestra sus respuestas y permite agregar nuevas. Si se cambia `CHATROOM_PORT`, Compose configura el origen correspondiente en la política CORS de `Thread.API`.
 
 Los proyectos todavía requieren aplicar las migraciones antes de usar sus endpoints de base de datos. Con Docker Compose activo, configurar la conexión desde PowerShell y aplicar ambas:
 

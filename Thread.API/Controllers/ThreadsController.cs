@@ -25,6 +25,23 @@ public class ThreadsController(IThreadService threadService) : ControllerBase
         return thread is null ? NotFound() : Ok(thread);
     }
 
+    [HttpGet("{threadId:int}/replies")]
+    public async Task<IActionResult> GetReplies(int threadId)
+    {
+        try
+        {
+            var replies = await threadService.GetRepliesAsync(threadId);
+            return replies is null ? NotFound() : Ok(replies);
+        }
+        catch (HttpRequestException)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status502BadGateway,
+                title: "Reply.API request failed",
+                detail: "The replies could not be loaded from Reply.API.");
+        }
+    }
+
     [HttpPost]
     public async Task<ActionResult<ThreadModel>> Create(CreateThreadRequest request)
     {

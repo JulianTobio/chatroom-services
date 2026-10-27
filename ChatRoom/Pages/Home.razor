@@ -10,13 +10,83 @@
             <MudText Typo="Typo.h3" Class="heading-title">Hilos recientes</MudText>
             <MudText Typo="Typo.body1" Color="Color.Secondary">Explora lo que está hablando la comunidad.</MudText>
         </div>
-        <MudButton Variant="Variant.Outlined"
-                   Color="Color.Primary"
-                   StartIcon="@Icons.Material.Filled.Refresh"
-                   OnClick="RefreshThreads">
-            Actualizar
-        </MudButton>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="RefreshThreads">
+                Actualizar
+            </MudButton>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="ToggleCreateForm">
+                Nuevo hilo
+            </MudButton>
+        </MudStack>
     </MudStack>
+
+    <MudCollapse Expanded="_showCreateForm">
+        <MudPaper Elevation="0" Outlined="true" Class="create-thread-panel">
+            <MudStack Spacing="3">
+                <MudStack>
+                    <MudText Typo="Typo.h6">Iniciar una conversación</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        El hilo se creará con el usuario #1.
+                    </MudText>
+                </MudStack>
+                <MudForm @ref="_createForm">
+                    <MudStack Spacing="2">
+                        <MudTextField T="string"
+                                      Label="Título"
+                                      Placeholder="¿De qué quieres hablar?"
+                                      Variant="Variant.Outlined"
+                                      @bind-Value="_newThread.Title"
+                                      Required="true"
+                                      RequiredError="El título es obligatorio."
+                                      Disabled="_isCreating" />
+                        <MudTextField T="string"
+                                      Label="Descripción"
+                                      Placeholder="Agrega contexto a tu hilo"
+                                      Variant="Variant.Outlined"
+                                      Lines="3"
+                                      @bind-Value="_newThread.Description"
+                                      Required="true"
+                                      RequiredError="La descripción es obligatoria."
+                                      Disabled="_isCreating" />
+                        <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
+                            <MudButton Variant="Variant.Text"
+                                       Disabled="_isCreating"
+                                       OnClick="ToggleCreateForm">
+                                Cancelar
+                            </MudButton>
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Send"
+                                       Disabled="_isCreating"
+                                       OnClick="CreateThread">
+                                @(_isCreating ? "Publicando..." : "Publicar hilo")
+                            </MudButton>
+                        </MudStack>
+                    </MudStack>
+                </MudForm>
+            </MudStack>
+        </MudPaper>
+    </MudCollapse>
+
+    @if (_createError is not null)
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+            @_createError
+        </MudAlert>
+    }
+
+    @if (_createSuccess is not null)
+    {
+        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">
+            @_createSuccess
+        </MudAlert>
+    }
 
     @if (_loadError is not null)
     {
@@ -45,7 +115,13 @@
             <RowTemplate>
                 <MudTd DataLabel="Hilo">
                     <MudStack Spacing="0">
-                        <MudText Typo="Typo.subtitle1" Class="thread-title">@context.Title</MudText>
+                        <MudLink Href="@($"/threads/{context.Id}")"
+                                 Typo="Typo.subtitle1"
+                                 Color="Color.Inherit"
+                                 Underline="Underline.Hover"
+                                 Class="thread-title">
+                            @context.Title
+                        </MudLink>
                         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="thread-description">
                             @context.Description
                         </MudText>
@@ -88,6 +164,12 @@
 
 @code {
     private MudTable<ThreadItem>? _table;
+    private MudForm? _createForm;
+    private CreateThreadRequest _newThread = new();
+    private bool _showCreateForm;
+    private bool _isCreating;
+    private string? _createError;
+    private string? _createSuccess;
     private string? _loadError;
 
     private async Task<TableData<ThreadItem>> LoadThreads(TableState state, CancellationToken cancellationToken)
@@ -131,6 +213,58 @@
         if (_table is not null)
         {
             await _table.ReloadServerData();
+        }
+    }
+
+    private void ToggleCreateForm()
+    {
+        _showCreateForm = !_showCreateForm;
+        _createError = null;
+        _createSuccess = null;
+    }
+
+    private async Task CreateThread()
+    {
+        if (_createForm is null || _isCreating)
+        {
+            return;
+        }
+
+        await _createForm.ValidateAsync();
+        if (!_createForm.IsValid)
+        {
+            return;
+        }
+
+        _isCreating = true;
+        _createError = null;
+        _createSuccess = null;
+
+        try
+        {
+            await ThreadApi.CreateAsync(_newThread);
+            _newThread = new CreateThreadRequest();
+            _showCreateForm = false;
+            _createSuccess = "El hilo se creó correctamente.";
+            _table?.NavigateTo(0);
+            if (_table is not null)
+            {
+                await _table.ReloadServerData();
+            }
+        }
+        catch (HttpRequestException exception)
+        {
+            _createError = exception.StatusCode is { } statusCode
+                ? $"Thread.API rechazó la solicitud (HTTP {(int)statusCode}): {exception.Message}"
+                : "No se pudo conectar con Thread.API. Comprueba que esté disponible e inténtalo nuevamente.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            _createError = "Thread.API devolvió una respuesta que no se pudo interpretar.";
+        }
+        finally
+        {
+            _isCreating = false;
         }
     }
 

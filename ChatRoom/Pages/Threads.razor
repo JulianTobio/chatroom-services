@@ -1,0 +1,227 @@
+@page "/threads/{ThreadId:int}"
+@inject IThreadApiClient ThreadApi
+@inject IJSRuntime JS
+
+<PageTitle>@(_thread is null ? "Conversación | ChatRoom" : $"{_thread.Title} | ChatRoom")</PageTitle>
+
+<MudStack Spacing="4" Class="conversation-page">
+    <MudLink Href="/" Color="Color.Primary" Underline="Underline.Hover" Class="back-link">
+        <MudIcon Icon="@Icons.Material.Filled.ArrowBack" Class="me-1" />
+        Volver a los hilos
+    </MudLink>
+
+    @if (_isLoading)
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="conversation-loading">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+            <MudText Color="Color.Secondary">Cargando conversación...</MudText>
+        </MudPaper>
+    }
+    else if (_thread is null)
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+            @(_loadError ?? "No se encontró el hilo solicitado.")
+        </MudAlert>
+    }
+    else
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="conversation-panel">
+            <MudStack Spacing="0" Class="conversation-header">
+                <MudText Typo="Typo.overline" Color="Color.Primary">HILO #@_thread.Id</MudText>
+                <MudText Typo="Typo.h4" Class="heading-title">@_thread.Title</MudText>
+                <MudText Typo="Typo.body1" Color="Color.Secondary">@_thread.Description</MudText>
+                <MudStack Row="true" Spacing="2" Class="thread-meta">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Autor #@_thread.Author</MudChip>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
+                        @_replies.Count respuesta(s)
+                    </MudChip>
+                </MudStack>
+            </MudStack>
+
+            @if (_loadError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="reply-error">
+                    @_loadError
+                </MudAlert>
+            }
+
+            <div class="chat-messages" @ref="_messagesContainer">
+                @if (_replies.Count == 0)
+                {
+                    <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Spacing="2" Class="chat-empty">
+                        <MudIcon Icon="@Icons.Material.Outlined.ChatBubbleOutline" Size="Size.Large" Color="Color.Secondary" />
+                        <MudText Typo="Typo.h6">Inicia la conversación</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Todavía no hay respuestas en este hilo.</MudText>
+                    </MudStack>
+                }
+                else
+                {
+                    @foreach (var reply in _replies)
+                    {
+                        <div @key="reply.Id" class="message-row @(reply.UserId == CurrentUserId ? "message-row-own" : string.Empty)">
+                            <MudPaper Elevation="0"
+                                      Class="@GetMessageBubbleClass(reply)">
+                                <MudText Typo="Typo.body1" Class="message-content">@reply.Content</MudText>
+                                <MudStack Row="true" Justify="Justify.SpaceBetween" Spacing="3" Class="message-meta">
+                                    <MudText Typo="Typo.caption">Usuario #@reply.UserId</MudText>
+                                    <MudText Typo="Typo.caption">@FormatDate(reply.Date)</MudText>
+                                </MudStack>
+                            </MudPaper>
+                        </div>
+                    }
+                }
+            </div>
+
+            @if (_replyError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="reply-error">
+                    @_replyError
+                </MudAlert>
+            }
+
+            <div class="chat-composer">
+                <MudTextField T="string"
+                              @bind-Value="_replyContent"
+                              Placeholder="Escribe una respuesta..."
+                              Variant="Variant.Outlined"
+                              Lines="2"
+                              MaxLines="5"
+                              Immediate="true"
+                              Disabled="_isSending"
+                              OnKeyDown="HandleComposerKeyDown"
+                              Class="composer-input" />
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Size="Size.Large"
+                           StartIcon="@Icons.Material.Filled.Send"
+                           Disabled="_isSending || string.IsNullOrWhiteSpace(_replyContent)"
+                           OnClick="SendReply"
+                           Class="send-button">
+                    @(_isSending ? "Enviando..." : "Enviar")
+                </MudButton>
+            </div>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="composer-hint">
+                Enviar con Ctrl + Enter · Usuario #@CurrentUserId
+            </MudText>
+        </MudPaper>
+    }
+</MudStack>
+
+@code {
+    [Parameter]
+    public int ThreadId { get; set; }
+
+    private const int CurrentUserId = 1;
+    private ThreadItem? _thread;
+    private List<ReplyItem> _replies = [];
+    private ElementReference _messagesContainer;
+    private string _replyContent = string.Empty;
+    private string? _loadError;
+    private string? _replyError;
+    private bool _isLoading = true;
+    private bool _isSending;
+    private bool _shouldScrollToBottom;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+        _replyError = null;
+        _thread = null;
+        _replies = [];
+
+        try
+        {
+            _thread = await ThreadApi.GetByIdAsync(ThreadId);
+            if (_thread is null)
+            {
+                return;
+            }
+
+            var replies = await ThreadApi.GetRepliesAsync(ThreadId);
+            _replies = replies
+                .OrderBy(reply => reply.Date)
+                .ThenBy(reply => reply.Id)
+                .ToList();
+            _shouldScrollToBottom = true;
+        }
+        catch (HttpRequestException)
+        {
+            _loadError = "No se pudo cargar la conversación. Comprueba que Thread.API y Reply.API estén disponibles.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            _loadError = "La API devolvió una respuesta que no se pudo interpretar.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_shouldScrollToBottom)
+        {
+            _shouldScrollToBottom = false;
+            await JS.InvokeVoidAsync("chatRoom.scrollToBottom", _messagesContainer);
+        }
+    }
+
+    private async Task SendReply()
+    {
+        if (_isSending || string.IsNullOrWhiteSpace(_replyContent))
+        {
+            return;
+        }
+
+        _isSending = true;
+        _replyError = null;
+        try
+        {
+            var createdReply = await ThreadApi.CreateReplyAsync(
+                ThreadId,
+                new CreateReplyRequest
+                {
+                    Content = _replyContent.Trim(),
+                    UserId = CurrentUserId
+                });
+
+            _replies.Add(createdReply);
+            _replies = _replies
+                .OrderBy(reply => reply.Date)
+                .ThenBy(reply => reply.Id)
+                .ToList();
+            _replyContent = string.Empty;
+            _shouldScrollToBottom = true;
+        }
+        catch (HttpRequestException)
+        {
+            _replyError = "No se pudo enviar la respuesta. Comprueba que las APIs estén disponibles e inténtalo nuevamente.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            _replyError = "La API devolvió una respuesta que no se pudo interpretar.";
+        }
+        finally
+        {
+            _isSending = false;
+        }
+    }
+
+    private async Task HandleComposerKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter" && args.CtrlKey)
+        {
+            await SendReply();
+        }
+    }
+
+    private static string FormatDate(DateTime date) =>
+        date.ToLocalTime().ToString("dd MMM yyyy, HH:mm");
+
+    private static string GetMessageBubbleClass(ReplyItem reply) =>
+        reply.UserId == CurrentUserId
+            ? "message-bubble message-bubble-own"
+            : "message-bubble";
+}

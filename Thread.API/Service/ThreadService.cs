@@ -142,4 +142,30 @@ public class ThreadService(ThreadContext context, IReplyApiClient replyApiClient
 
         return true;
     }
+
+    public async Task<IReadOnlyList<ReplyApiReply>?> GetRepliesAsync(int threadId)
+    {
+        var threadExists = await context.Threads
+            .AnyAsync(thread => thread.Id == threadId);
+        if (!threadExists)
+        {
+            return null;
+        }
+
+        const int pageSize = 100;
+        var replies = new List<ReplyApiReply>();
+        var firstPage = await replyApiClient.GetByThreadAsync(threadId, 1, pageSize);
+        replies.AddRange(firstPage.Items);
+
+        for (var pageNumber = 2; pageNumber <= firstPage.TotalPages; pageNumber++)
+        {
+            var page = await replyApiClient.GetByThreadAsync(threadId, pageNumber, pageSize);
+            replies.AddRange(page.Items);
+        }
+
+        return replies
+            .OrderBy(reply => reply.Date)
+            .ThenBy(reply => reply.Id)
+            .ToList();
+    }
 }
