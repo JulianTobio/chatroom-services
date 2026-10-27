@@ -4,7 +4,7 @@ namespace Thread.API.Service;
 
 public interface IReplyApiClient
 {
-    Task<ReplyApiReply> CreateAsync(int threadId, CreateThreadReplyRequest request);
+    Task<ReplyApiReply> CreateAsync(ReplyApiCreateRequest request);
 
     Task<ReplyApiReply?> GetAsync(int replyId);
 

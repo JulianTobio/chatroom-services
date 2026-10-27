@@ -1,10 +1,29 @@
 ﻿@inherits LayoutComponentBase
+@inject ChatAuthStateProvider AuthState
+@inject NavigationManager Navigation
 
 <MudLayout>
     <MudAppBar Elevation="0" Color="Color.Surface" Class="chatroom-appbar">
-        <MudText Typo="Typo.h6" Class="brand-mark">ChatRoom</MudText>
+        <MudLink Href="/" Typo="Typo.h6" Color="Color.Inherit" Underline="Underline.None" Class="brand-mark">
+            ChatRoom
+        </MudLink>
         <MudSpacer />
         <MudText Typo="Typo.body2" Color="Color.Secondary">Conversaciones de la comunidad</MudText>
+        <AuthorizeView>
+            <Authorized Context="auth">
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="account-chip">
+                    @auth.User.Identity?.Name
+                </MudChip>
+                <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="SignOut">
+                    Cerrar sesión
+                </MudButton>
+            </Authorized>
+            <NotAuthorized>
+                <MudButton Href="/login" Variant="Variant.Filled" Color="Color.Primary">
+                    Iniciar sesión
+                </MudButton>
+            </NotAuthorized>
+        </AuthorizeView>
     </MudAppBar>
     <MudMainContent>
         <MudContainer MaxWidth="MaxWidth.Large" Class="page-container">
@@ -12,3 +31,11 @@
         </MudContainer>
     </MudMainContent>
 </MudLayout>
+
+@code {
+    private void SignOut()
+    {
+        AuthState.SignOut();
+        Navigation.NavigateTo("/login");
+    }
+}

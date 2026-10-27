@@ -17,62 +17,77 @@
                        OnClick="RefreshThreads">
                 Actualizar
             </MudButton>
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       StartIcon="@Icons.Material.Filled.Add"
-                       OnClick="ToggleCreateForm">
-                Nuevo hilo
-            </MudButton>
+            <AuthorizeView>
+                <Authorized>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="ToggleCreateForm">
+                        Nuevo hilo
+                    </MudButton>
+                </Authorized>
+                <NotAuthorized>
+                    <MudButton Href="/login?returnUrl=%2F"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary">
+                        Inicia sesión para publicar
+                    </MudButton>
+                </NotAuthorized>
+            </AuthorizeView>
         </MudStack>
     </MudStack>
 
-    <MudCollapse Expanded="_showCreateForm">
-        <MudPaper Elevation="0" Outlined="true" Class="create-thread-panel">
-            <MudStack Spacing="3">
-                <MudStack>
-                    <MudText Typo="Typo.h6">Iniciar una conversación</MudText>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary">
-                        El hilo se creará con el usuario #1.
-                    </MudText>
-                </MudStack>
-                <MudForm @ref="_createForm">
-                    <MudStack Spacing="2">
-                        <MudTextField T="string"
-                                      Label="Título"
-                                      Placeholder="¿De qué quieres hablar?"
-                                      Variant="Variant.Outlined"
-                                      @bind-Value="_newThread.Title"
-                                      Required="true"
-                                      RequiredError="El título es obligatorio."
-                                      Disabled="_isCreating" />
-                        <MudTextField T="string"
-                                      Label="Descripción"
-                                      Placeholder="Agrega contexto a tu hilo"
-                                      Variant="Variant.Outlined"
-                                      Lines="3"
-                                      @bind-Value="_newThread.Description"
-                                      Required="true"
-                                      RequiredError="La descripción es obligatoria."
-                                      Disabled="_isCreating" />
-                        <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
-                            <MudButton Variant="Variant.Text"
-                                       Disabled="_isCreating"
-                                       OnClick="ToggleCreateForm">
-                                Cancelar
-                            </MudButton>
-                            <MudButton Variant="Variant.Filled"
-                                       Color="Color.Primary"
-                                       StartIcon="@Icons.Material.Filled.Send"
-                                       Disabled="_isCreating"
-                                       OnClick="CreateThread">
-                                @(_isCreating ? "Publicando..." : "Publicar hilo")
-                            </MudButton>
+    <AuthorizeView>
+        <Authorized>
+            <MudCollapse Expanded="_showCreateForm">
+                <MudPaper Elevation="0" Outlined="true" Class="create-thread-panel">
+                    <MudStack Spacing="3">
+                        <MudStack>
+                            <MudText Typo="Typo.h6">Iniciar una conversación</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                El hilo se asociará a tu cuenta.
+                            </MudText>
                         </MudStack>
+                        <MudForm @ref="_createForm">
+                            <MudStack Spacing="2">
+                                <MudTextField T="string"
+                                              Label="Título"
+                                              Placeholder="¿De qué quieres hablar?"
+                                              Variant="Variant.Outlined"
+                                              @bind-Value="_newThread.Title"
+                                              Required="true"
+                                              RequiredError="El título es obligatorio."
+                                              Disabled="_isCreating" />
+                                <MudTextField T="string"
+                                              Label="Descripción"
+                                              Placeholder="Agrega contexto a tu hilo"
+                                              Variant="Variant.Outlined"
+                                              Lines="3"
+                                              @bind-Value="_newThread.Description"
+                                              Required="true"
+                                              RequiredError="La descripción es obligatoria."
+                                              Disabled="_isCreating" />
+                                <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
+                                    <MudButton Variant="Variant.Text"
+                                               Disabled="_isCreating"
+                                               OnClick="ToggleCreateForm">
+                                        Cancelar
+                                    </MudButton>
+                                    <MudButton Variant="Variant.Filled"
+                                               Color="Color.Primary"
+                                               StartIcon="@Icons.Material.Filled.Send"
+                                               Disabled="_isCreating"
+                                               OnClick="CreateThread">
+                                        @(_isCreating ? "Publicando..." : "Publicar hilo")
+                                    </MudButton>
+                                </MudStack>
+                            </MudStack>
+                        </MudForm>
                     </MudStack>
-                </MudForm>
-            </MudStack>
-        </MudPaper>
-    </MudCollapse>
+                </MudPaper>
+            </MudCollapse>
+        </Authorized>
+    </AuthorizeView>
 
     @if (_createError is not null)
     {

@@ -38,10 +38,10 @@ namespace Reply.API.Service
             await context.SaveChangesAsync();
         }
 
-        public async Task<bool> RemoveReplyAsync(int replyId)
+        public async Task<bool> RemoveReplyAsync(int replyId, int userId)
         {
             var reply = await context.Replies.FindAsync(replyId);
-            if (reply is null)
+            if (reply is null || reply.UserId != userId)
             {
                 return false;
             }
@@ -51,18 +51,15 @@ namespace Reply.API.Service
             return true;
         }
 
-        public async Task<int> UpdateReplyAsync(int replyId, ReplyItem reply)
+        public async Task<int> UpdateReplyAsync(int replyId, int userId, string content)
         {
             var existingReply = await context.Replies.FindAsync(replyId);
-            if (existingReply is null)
+            if (existingReply is null || existingReply.UserId != userId)
             {
                 return 0;
             }
 
-            existingReply.Content = reply.Content;
-            existingReply.Date = reply.Date;
-            existingReply.TopicId = reply.TopicId;
-            existingReply.UserId = reply.UserId;
+            existingReply.Content = content;
 
             return await context.SaveChangesAsync();
         }

@@ -7,6 +7,7 @@ services:
       dockerfile: Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Development
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
       ConnectionStrings__DefaultConnection: "Data Source=host.docker.internal,1433;Database=chatReply;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;Encrypt=True"
     ports:
       - "${REPLY_API_PORT:-5025}:8080"
@@ -20,6 +21,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__DefaultConnection: "Data Source=host.docker.internal,1433;Database=chatThread;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;Encrypt=True"
       ReplyApi__BaseAddress: http://reply-api:8080/
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
       Cors__AllowedOrigins__0: "http://localhost:${CHATROOM_PORT:-5017}"
     ports:
       - "${THREAD_API_PORT:-5026}:8080"
@@ -37,3 +39,16 @@ services:
     depends_on:
       thread-api:
         condition: service_started
+
+  users-api:
+    image: chatroom-users-api:latest
+    build:
+      context: ./Users.API
+      dockerfile: Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Data Source=host.docker.internal,1433;Database=chatUsers;User Id=sa;Password=${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in .env};TrustServerCertificate=True;Encrypt=True"
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
+      Cors__AllowedOrigins__0: "http://localhost:${CHATROOM_PORT:-5017}"
+    ports:
+      - "${USERS_API_PORT:-5027}:8080"

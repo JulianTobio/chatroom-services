@@ -1,21 +1,21 @@
 using System.Net.Http.Json;
+using System.Net.Http.Headers;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using Thread.API.Models;
 
 namespace Thread.API.Service;
 
-public class ReplyApiClient(HttpClient httpClient) : IReplyApiClient
+public class ReplyApiClient(HttpClient httpClient, IHttpContextAccessor httpContextAccessor) : IReplyApiClient
 {
-    public async Task<ReplyApiReply> CreateAsync(int threadId, CreateThreadReplyRequest request)
+    public async Task<ReplyApiReply> CreateAsync(ReplyApiCreateRequest replyRequest)
     {
-        var replyRequest = new ReplyApiCreateRequest
+        using var requestMessage = new HttpRequestMessage(HttpMethod.Post, "api/replies")
         {
-            Content = request.Content,
-            TopicId = threadId,
-            UserId = request.UserId
+            Content = JsonContent.Create(replyRequest)
         };
-
-        using var response = await httpClient.PostAsJsonAsync("api/replies", replyRequest);
+        ForwardAccessToken(requestMessage);
+        using var response = await httpClient.SendAsync(requestMessage);
         response.EnsureSuccessStatusCode();
 
         try
@@ -31,7 +31,9 @@ public class ReplyApiClient(HttpClient httpClient) : IReplyApiClient
 
     public async Task<bool> DeleteAsync(int replyId)
     {
-        using var response = await httpClient.DeleteAsync($"api/replies/{replyId}");
+        using var requestMessage = new HttpRequestMessage(HttpMethod.Delete, $"api/replies/{replyId}");
+        ForwardAccessToken(requestMessage);
+        using var response = await httpClient.SendAsync(requestMessage);
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             return false;
@@ -78,4 +80,12 @@ public class ReplyApiClient(HttpClient httpClient) : IReplyApiClient
         }
     }
 
+    private void ForwardAccessToken(HttpRequestMessage request)
+    {
+        var authorization = httpContextAccessor.HttpContext?.Request.Headers.Authorization.ToString();
+        if (AuthenticationHeaderValue.TryParse(authorization, out var authorizationHeader))
+        {
+            request.Headers.Authorization = authorizationHeader;
+        }
+    }
 }

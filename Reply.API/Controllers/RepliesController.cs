@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
 using Reply.API.Models;
@@ -27,14 +29,20 @@ namespace Reply.API.Controllers
         }
 
         [HttpPost]
+        [Authorize]
         public async Task<ActionResult<ReplyItem>> Create(CreateReplyRequest request)
         {
+            if (!TryGetUserId(out var userId))
+            {
+                return Unauthorized();
+            }
+
             var item = new ReplyItem
             {
                 Content = request.Content,
                 Date = DateTime.UtcNow,
                 TopicId = request.TopicId,
-                UserId = request.UserId
+                UserId = userId
             };
 
             await replyService.AddReplyAsync(item);
@@ -42,17 +50,35 @@ namespace Reply.API.Controllers
         }
 
         [HttpPut("{replyId:int}")]
+        [Authorize]
         public async Task<IActionResult> Update(int replyId, ReplyItem item)
         {
-            var updatedCount = await replyService.UpdateReplyAsync(replyId, item);
+            if (!TryGetUserId(out var userId))
+            {
+                return Unauthorized();
+            }
+
+            var updatedCount = await replyService.UpdateReplyAsync(replyId, userId, item.Content);
             return updatedCount == 0 ? NotFound() : NoContent();
         }
 
         [HttpDelete("{replyId:int}")]
+        [Authorize]
         public async Task<IActionResult> Delete(int replyId)
         {
-            var removed = await replyService.RemoveReplyAsync(replyId);
+            if (!TryGetUserId(out var userId))
+            {
+                return Unauthorized();
+            }
+
+            var removed = await replyService.RemoveReplyAsync(replyId, userId);
             return removed ? NoContent() : NotFound();
+        }
+
+        private bool TryGetUserId(out int userId)
+        {
+            var id = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return int.TryParse(id, out userId);
         }
     }
 }

@@ -10,8 +10,8 @@ namespace Reply.API.Service
 
         public Task AddReplyAsync(ReplyItem item);
 
-        public Task<bool> RemoveReplyAsync(int replyId);
+        public Task<bool> RemoveReplyAsync(int replyId, int userId);
 
-        public Task<int> UpdateReplyAsync(int replyId, ReplyItem reply);
+        public Task<int> UpdateReplyAsync(int replyId, int userId, string content);
     }
 }

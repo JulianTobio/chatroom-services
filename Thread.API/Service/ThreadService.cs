@@ -49,7 +49,6 @@ public class ThreadService(ThreadContext context, IReplyApiClient replyApiClient
 
         existingThread.Title = thread.Title;
         existingThread.Description = thread.Description;
-        existingThread.Author = thread.Author;
 
         await context.SaveChangesAsync();
         return true;
@@ -68,7 +67,9 @@ public class ThreadService(ThreadContext context, IReplyApiClient replyApiClient
         return true;
     }
 
-    public async Task<ReplyApiReply?> CreateReplyAsync(int threadId, CreateThreadReplyRequest request)
+    public async Task<ReplyApiReply?> CreateReplyAsync(
+        int threadId,
+        CreateThreadReplyRequest request)
     {
         var threadExists = await context.Threads
             .AnyAsync(thread => thread.Id == threadId);
@@ -77,7 +78,12 @@ public class ThreadService(ThreadContext context, IReplyApiClient replyApiClient
             return null;
         }
 
-        var reply = await replyApiClient.CreateAsync(threadId, request);
+        var reply = await replyApiClient.CreateAsync(
+            new ReplyApiCreateRequest
+            {
+                Content = request.Content,
+                TopicId = threadId
+            });
         var updatedRows = await context.Threads
             .Where(thread => thread.Id == threadId)
             .ExecuteUpdateAsync(updates => updates
@@ -97,7 +103,7 @@ public class ThreadService(ThreadContext context, IReplyApiClient replyApiClient
         return reply;
     }
 
-    public async Task<bool> DeleteReplyAsync(int threadId, int replyId)
+    public async Task<bool> DeleteReplyAsync(int threadId, int replyId, int userId)
     {
         var threadExists = await context.Threads
             .AnyAsync(thread => thread.Id == threadId);
@@ -107,7 +113,7 @@ public class ThreadService(ThreadContext context, IReplyApiClient replyApiClient
         }
 
         var reply = await replyApiClient.GetAsync(replyId);
-        if (reply is null || reply.TopicId != threadId)
+        if (reply is null || reply.TopicId != threadId || reply.UserId != userId)
         {
             return false;
         }

@@ -1,6 +1,7 @@
 @page "/threads/{ThreadId:int}"
 @inject IThreadApiClient ThreadApi
 @inject IJSRuntime JS
+@inject ChatAuthStateProvider AuthState
 
 <PageTitle>@(_thread is null ? "Conversación | ChatRoom" : $"{_thread.Title} | ChatRoom")</PageTitle>
 
@@ -79,30 +80,42 @@
                 </MudAlert>
             }
 
-            <div class="chat-composer">
-                <MudTextField T="string"
-                              @bind-Value="_replyContent"
-                              Placeholder="Escribe una respuesta..."
-                              Variant="Variant.Outlined"
-                              Lines="2"
-                              MaxLines="5"
-                              Immediate="true"
-                              Disabled="_isSending"
-                              OnKeyDown="HandleComposerKeyDown"
-                              Class="composer-input" />
-                <MudButton Variant="Variant.Filled"
-                           Color="Color.Primary"
-                           Size="Size.Large"
-                           StartIcon="@Icons.Material.Filled.Send"
-                           Disabled="_isSending || string.IsNullOrWhiteSpace(_replyContent)"
-                           OnClick="SendReply"
-                           Class="send-button">
-                    @(_isSending ? "Enviando..." : "Enviar")
-                </MudButton>
-            </div>
-            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="composer-hint">
-                Enviar con Ctrl + Enter · Usuario #@CurrentUserId
-            </MudText>
+            <AuthorizeView>
+                <Authorized>
+                    <div class="chat-composer">
+                        <MudTextField T="string"
+                                      @bind-Value="_replyContent"
+                                      Placeholder="Escribe una respuesta..."
+                                      Variant="Variant.Outlined"
+                                      Lines="2"
+                                      MaxLines="5"
+                                      Immediate="true"
+                                      Disabled="_isSending"
+                                      OnKeyDown="HandleComposerKeyDown"
+                                      Class="composer-input" />
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Size="Size.Large"
+                                   StartIcon="@Icons.Material.Filled.Send"
+                                   Disabled="_isSending || string.IsNullOrWhiteSpace(_replyContent)"
+                                   OnClick="SendReply"
+                                   Class="send-button">
+                            @(_isSending ? "Enviando..." : "Enviar")
+                        </MudButton>
+                    </div>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="composer-hint">
+                        Enviar con Ctrl + Enter
+                    </MudText>
+                </Authorized>
+                <NotAuthorized>
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="reply-error">
+                        <MudLink Href="@GetLoginUrl()">
+                            Inicia sesión
+                        </MudLink>
+                        para responder en esta conversación.
+                    </MudAlert>
+                </NotAuthorized>
+            </AuthorizeView>
         </MudPaper>
     }
 </MudStack>
@@ -111,7 +124,7 @@
     [Parameter]
     public int ThreadId { get; set; }
 
-    private const int CurrentUserId = 1;
+    private int CurrentUserId => AuthState.User?.Id ?? 0;
     private ThreadItem? _thread;
     private List<ReplyItem> _replies = [];
     private ElementReference _messagesContainer;
@@ -183,8 +196,7 @@
                 ThreadId,
                 new CreateReplyRequest
                 {
-                    Content = _replyContent.Trim(),
-                    UserId = CurrentUserId
+                    Content = _replyContent.Trim()
                 });
 
             _replies.Add(createdReply);
@@ -220,7 +232,10 @@
     private static string FormatDate(DateTime date) =>
         date.ToLocalTime().ToString("dd MMM yyyy, HH:mm");
 
-    private static string GetMessageBubbleClass(ReplyItem reply) =>
+    private string GetLoginUrl() =>
+        $"/login?returnUrl={Uri.EscapeDataString($"/threads/{ThreadId}")}";
+
+    private string GetMessageBubbleClass(ReplyItem reply) =>
         reply.UserId == CurrentUserId
             ? "message-bubble message-bubble-own"
             : "message-bubble";

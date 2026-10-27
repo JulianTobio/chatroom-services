@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
 using Thread.API.Models;
@@ -43,14 +45,20 @@ public class ThreadsController(IThreadService threadService) : ControllerBase
     }
 
     [HttpPost]
+    [Authorize]
     public async Task<ActionResult<ThreadModel>> Create(CreateThreadRequest request)
     {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
         var thread = new ThreadModel
         {
             Title = request.Title,
             Description = request.Description,
             Created = DateTime.UtcNow,
-            Author = request.Author
+            Author = userId
         };
 
         await threadService.AddAsync(thread);
@@ -58,30 +66,69 @@ public class ThreadsController(IThreadService threadService) : ControllerBase
     }
 
     [HttpPut("{threadId:int}")]
+    [Authorize]
     public async Task<IActionResult> Update(int threadId, UpdateThreadRequest request)
     {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var existingThread = await threadService.GetAsync(threadId);
+        if (existingThread is null)
+        {
+            return NotFound();
+        }
+        if (existingThread.Author != userId)
+        {
+            return Forbid();
+        }
+
         var thread = new ThreadModel
         {
             Title = request.Title,
-            Description = request.Description,
-            Author = request.Author
+            Description = request.Description
         };
 
         return await threadService.UpdateAsync(threadId, thread) ? NoContent() : NotFound();
     }
 
     [HttpDelete("{threadId:int}")]
+    [Authorize]
     public async Task<IActionResult> Delete(int threadId)
     {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var thread = await threadService.GetAsync(threadId);
+        if (thread is null)
+        {
+            return NotFound();
+        }
+        if (thread.Author != userId)
+        {
+            return Forbid();
+        }
+
         return await threadService.RemoveAsync(threadId) ? NoContent() : NotFound();
     }
 
     [HttpPost("{threadId:int}/replies")]
+    [Authorize]
     public async Task<IActionResult> CreateReply(int threadId, CreateThreadReplyRequest request)
     {
+        if (!TryGetUserId(out _))
+        {
+            return Unauthorized();
+        }
+
         try
         {
-            var reply = await threadService.CreateReplyAsync(threadId, request);
+            var reply = await threadService.CreateReplyAsync(
+                threadId,
+                new CreateThreadReplyRequest { Content = request.Content });
             return reply is null ? NotFound() : StatusCode(StatusCodes.Status201Created, reply);
         }
         catch (HttpRequestException)
@@ -94,11 +141,17 @@ public class ThreadsController(IThreadService threadService) : ControllerBase
     }
 
     [HttpDelete("{threadId:int}/replies/{replyId:int}")]
+    [Authorize]
     public async Task<IActionResult> DeleteReply(int threadId, int replyId)
     {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
         try
         {
-            return await threadService.DeleteReplyAsync(threadId, replyId)
+            return await threadService.DeleteReplyAsync(threadId, replyId, userId)
                 ? NoContent()
                 : NotFound();
         }
@@ -109,5 +162,11 @@ public class ThreadsController(IThreadService threadService) : ControllerBase
                 title: "Reply.API request failed",
                 detail: "The reply could not be deleted or verified by Reply.API.");
         }
+    }
+
+    private bool TryGetUserId(out int userId)
+    {
+        var id = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return int.TryParse(id, out userId);
     }
 }

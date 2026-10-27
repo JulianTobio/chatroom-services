@@ -6,6 +6,4 @@ public class CreateThreadReplyRequest
 {
     [Required]
     public string Content { get; set; } = string.Empty;
-
-    public int UserId { get; set; }
 }

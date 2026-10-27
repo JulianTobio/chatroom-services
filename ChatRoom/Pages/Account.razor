@@ -1,0 +1,239 @@
+@page "/login"
+@page "/register"
+@inject AuthApiClient AuthApi
+@inject ChatAuthStateProvider AuthState
+@inject NavigationManager Navigation
+
+<PageTitle>@(_activeTab == 1 ? "Crear cuenta | ChatRoom" : "Iniciar sesión | ChatRoom")</PageTitle>
+
+<MudGrid Justify="Justify.Center" Class="account-page">
+    <MudItem xs="12" sm="10" md="7" lg="6">
+        <MudPaper Elevation="0" Outlined="true" Class="account-panel">
+            <MudStack Spacing="3">
+                <MudStack Spacing="1">
+                    <MudText Typo="Typo.overline" Color="Color.Primary">CHATROOM</MudText>
+                    <MudText Typo="Typo.h4" Class="heading-title">
+                        @(_activeTab == 1 ? "Crea tu cuenta" : "Qué bueno verte")
+                    </MudText>
+                    <MudText Typo="Typo.body1" Color="Color.Secondary">
+                        @(_activeTab == 1 ? "Únete a la conversación." : "Inicia sesión para participar en la conversación.")
+                    </MudText>
+                </MudStack>
+
+                @if (_error is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_error</MudAlert>
+                }
+
+                <MudTabs @bind-ActivePanelIndex="_activeTab" Rounded="true" Elevation="0">
+                    <MudTabPanel Text="Iniciar sesión">
+                        <MudForm @ref="_loginForm" Class="account-form">
+                            <MudStack Spacing="3">
+                                <MudTextField T="string"
+                                              Label="Nombre de usuario"
+                                              Variant="Variant.Outlined"
+                                              @bind-Value="_login.Username"
+                                              Required="true"
+                                              RequiredError="Ingresa tu nombre de usuario."
+                                              Disabled="_isSubmitting" />
+                                <MudTextField T="string"
+                                              Label="Contraseña"
+                                              Variant="Variant.Outlined"
+                                              InputType="InputType.Password"
+                                              @bind-Value="_login.Password"
+                                              Required="true"
+                                              RequiredError="Ingresa tu contraseña."
+                                              Disabled="_isSubmitting" />
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           Size="Size.Large"
+                                           FullWidth="true"
+                                           Disabled="_isSubmitting"
+                                           OnClick="Login">
+                                    @(_isSubmitting ? "Ingresando..." : "Iniciar sesión")
+                                </MudButton>
+                            </MudStack>
+                        </MudForm>
+                    </MudTabPanel>
+                    <MudTabPanel Text="Crear cuenta">
+                        <MudForm @ref="_registerForm" Class="account-form">
+                            <MudStack Spacing="3">
+                                <MudTextField T="string"
+                                              Label="Nombre de usuario"
+                                              Variant="Variant.Outlined"
+                                              @bind-Value="_register.Username"
+                                              Required="true"
+                                              RequiredError="El nombre de usuario es obligatorio."
+                                              Validation="@(new Func<string, string?>(ValidateUsername))"
+                                              Disabled="_isSubmitting" />
+                                <MudStack Row="true" Spacing="2">
+                                    <MudTextField T="string"
+                                                  Label="Nombre"
+                                                  Variant="Variant.Outlined"
+                                                  @bind-Value="_register.Name"
+                                                  Required="true"
+                                                  Disabled="_isSubmitting" />
+                                    <MudTextField T="string"
+                                                  Label="Apellido"
+                                                  Variant="Variant.Outlined"
+                                                  @bind-Value="_register.Lastname"
+                                                  Required="true"
+                                                  Disabled="_isSubmitting" />
+                                </MudStack>
+                                <MudTextField T="string"
+                                              Label="Correo electrónico"
+                                              Variant="Variant.Outlined"
+                                              InputType="InputType.Email"
+                                              @bind-Value="_register.Mail"
+                                              Required="true"
+                                              Validation="@(new Func<string, string?>(ValidateEmail))"
+                                              Disabled="_isSubmitting" />
+                                <MudTextField T="string"
+                                              Label="URL de imagen (opcional)"
+                                              Variant="Variant.Outlined"
+                                              InputType="InputType.Url"
+                                              @bind-Value="_register.Image"
+                                              Validation="@(new Func<string?, string?>(ValidateImageUrl))"
+                                              Disabled="_isSubmitting" />
+                                <MudTextField T="string"
+                                              Label="Contraseña"
+                                              Variant="Variant.Outlined"
+                                              InputType="InputType.Password"
+                                              HelperText="Mínimo 10 caracteres, con mayúscula, minúscula, número y símbolo."
+                                              @bind-Value="_register.Password"
+                                              Required="true"
+                                              Validation="@(new Func<string, string?>(ValidatePassword))"
+                                              Disabled="_isSubmitting" />
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           Size="Size.Large"
+                                           FullWidth="true"
+                                           Disabled="_isSubmitting"
+                                           OnClick="Register">
+                                    @(_isSubmitting ? "Creando cuenta..." : "Crear cuenta")
+                                </MudButton>
+                            </MudStack>
+                        </MudForm>
+                    </MudTabPanel>
+                </MudTabs>
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
+    private MudForm? _loginForm;
+    private MudForm? _registerForm;
+    private readonly LoginRequest _login = new();
+    private readonly RegisterRequest _register = new();
+    private bool _isSubmitting;
+    private int _activeTab;
+    private string? _error;
+
+    protected override void OnParametersSet()
+    {
+        var isRegistering = Navigation.ToBaseRelativePath(Navigation.Uri)
+            .StartsWith("register", StringComparison.OrdinalIgnoreCase);
+        _activeTab = isRegistering ? 1 : 0;
+    }
+
+    private async Task Login()
+    {
+        if (_loginForm is null || _isSubmitting)
+        {
+            return;
+        }
+
+        await _loginForm.ValidateAsync();
+        if (!_loginForm.IsValid)
+        {
+            return;
+        }
+
+        await Submit(() => AuthApi.LoginAsync(_login));
+    }
+
+    private async Task Register()
+    {
+        if (_registerForm is null || _isSubmitting)
+        {
+            return;
+        }
+
+        await _registerForm.ValidateAsync();
+        if (!_registerForm.IsValid)
+        {
+            return;
+        }
+
+        await Submit(() => AuthApi.RegisterAsync(_register));
+    }
+
+    private async Task Submit(Func<Task<AuthResponse>> authenticate)
+    {
+        _isSubmitting = true;
+        _error = null;
+        try
+        {
+            var response = await authenticate();
+            AuthState.SignIn(response);
+            Navigation.NavigateTo(GetSafeReturnUrl());
+        }
+        catch (HttpRequestException exception)
+        {
+            _error = exception.StatusCode is { } statusCode
+                ? $"Users.API respondió HTTP {(int)statusCode}: {exception.Message}"
+                : "No se pudo conectar con Users.API. Inténtalo nuevamente.";
+        }
+        catch (TaskCanceledException)
+        {
+            _error = "Users.API tardó demasiado en responder. Inténtalo nuevamente.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            _error = "Users.API devolvió una respuesta que no se pudo interpretar.";
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private string GetSafeReturnUrl() =>
+        !string.IsNullOrWhiteSpace(ReturnUrl)
+        && ReturnUrl.StartsWith('/')
+        && !ReturnUrl.StartsWith("//", StringComparison.Ordinal)
+            ? ReturnUrl
+            : "/";
+
+    private static string? ValidateEmail(string email) =>
+        System.Net.Mail.MailAddress.TryCreate(email, out _)
+            ? null
+            : "Ingresa un correo electrónico válido.";
+
+    private static string? ValidateUsername(string username) =>
+        username.Length is >= 3 and <= 50
+            ? null
+            : "El nombre de usuario debe tener entre 3 y 50 caracteres.";
+
+    private static string? ValidatePassword(string password) =>
+        password.Length >= 10
+            ? null
+            : "La contraseña debe tener al menos 10 caracteres.";
+
+    private static string? ValidateImageUrl(string? image)
+    {
+        if (string.IsNullOrWhiteSpace(image))
+        {
+            return null;
+        }
+
+        return Uri.TryCreate(image, UriKind.Absolute, out var uri)
+            && uri.Scheme is "http" or "https"
+                ? null
+                : "La imagen debe ser una URL HTTP o HTTPS.";
+    }
+}

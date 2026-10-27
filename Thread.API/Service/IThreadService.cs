@@ -17,7 +17,7 @@ public interface IThreadService
 
     Task<ReplyApiReply?> CreateReplyAsync(int threadId, CreateThreadReplyRequest request);
 
-    Task<bool> DeleteReplyAsync(int threadId, int replyId);
+    Task<bool> DeleteReplyAsync(int threadId, int replyId, int userId);
 
     Task<IReadOnlyList<ReplyApiReply>?> GetRepliesAsync(int threadId);
 }
