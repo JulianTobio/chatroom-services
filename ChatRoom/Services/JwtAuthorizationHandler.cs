@@ -8,7 +8,8 @@ public class JwtAuthorizationHandler(ChatAuthStateProvider authStateProvider) : 
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
-        if (authStateProvider.IsAuthenticated && authStateProvider.AccessToken is { } token)
+        if (await authStateProvider.EnsureFreshAccessTokenAsync()
+            && authStateProvider.AccessToken is { } token)
         {
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }

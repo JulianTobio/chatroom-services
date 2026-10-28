@@ -16,7 +16,7 @@ public class JwtTokenService(IConfiguration configuration) : IJwtTokenService
             ?? throw new InvalidOperationException("Configure Jwt:Audience.");
         var signingKey = configuration["Jwt:SigningKey"]
             ?? throw new InvalidOperationException("Configure Jwt:SigningKey using an environment variable or user secrets.");
-        var expiresAt = DateTime.UtcNow.AddMinutes(60);
+        var expiresAt = DateTime.UtcNow.AddMinutes(15);
         var credentials = new SigningCredentials(
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
             SecurityAlgorithms.HmacSha256);

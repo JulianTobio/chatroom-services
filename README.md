@@ -17,7 +17,7 @@ Compose inicia `Users.API`, `Reply.API`, `Thread.API` y la aplicación `ChatRoom
 - ChatRoom WebAssembly: `http://localhost:5017`
 - OpenAPI/Swagger en modo Development: `/openapi/v1.json` y `/swagger`
 
-La página principal consume la API paginada de `Thread.API`. Cada hilo abre su vista de conversación (`/threads/{id}`), que muestra sus respuestas y permite agregar nuevas. El registro y el inicio de sesión están disponibles desde ChatRoom. El JWT se conserva sólo en memoria del navegador; al recargar la página hay que iniciar sesión de nuevo. Los endpoints de escritura requieren autenticación, y sólo el autor puede editar o eliminar sus hilos y respuestas. Si se cambia `CHATROOM_PORT`, Compose configura el origen correspondiente en las políticas CORS.
+La página principal consume la API paginada de `Thread.API`. Cada hilo abre su vista de conversación (`/threads/{id}`), que muestra sus respuestas y permite agregar nuevas. El registro y el inicio de sesión están disponibles desde ChatRoom. El JWT de acceso (15 minutos) se conserva sólo en memoria; al abrir la aplicación, Users.API restaura la sesión mediante una cookie `HttpOnly` con refresh token. El refresh token rota al renovarse, con expiración deslizante de 30 días y máxima de 90 días. Cada dispositivo tiene una sesión independiente; cerrar sesión revoca la sesión de ese dispositivo. Las APIs deben servirse por HTTPS fuera de Development. Los endpoints de escritura requieren autenticación, y sólo el autor puede editar o eliminar sus hilos y respuestas. Si se cambia `CHATROOM_PORT`, Compose configura el origen correspondiente en las políticas CORS.
 
 Los proyectos todavía requieren aplicar las migraciones antes de usar sus endpoints de base de datos. Con Docker Compose activo, configurar la conexión desde PowerShell y aplicar ambas:
 
@@ -40,4 +40,4 @@ dotnet user-secrets set "Jwt:SigningKey" "<JWT_SIGNING_KEY_DE_AL_MENOS_32_BYTES>
 dotnet ef database update --project Users.API\Users.API.csproj --startup-project Users.API\Users.API.csproj
 ```
 
-En Compose, establecer `JWT_SIGNING_KEY` en `.env`; nunca guardar una clave real en el repositorio.
+En Compose, establecer `JWT_SIGNING_KEY` en `.env`; nunca guardar una clave real en el repositorio. La política CORS de Users.API permite credenciales sólo para los orígenes configurados y los endpoints que emiten, renuevan o revocan cookies validan el encabezado `Origin`. Web y APIs deben compartir el mismo sitio para que `SameSite=Lax` funcione; la cookie es host-only, HttpOnly y Secure fuera de Development.

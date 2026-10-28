@@ -1,6 +1,8 @@
 ﻿@inherits LayoutComponentBase
 @inject ChatAuthStateProvider AuthState
+@inject AuthApiClient AuthApi
 @inject NavigationManager Navigation
+@inject ISnackbar Snackbar
 
 <MudLayout>
     <MudAppBar Elevation="0" Color="Color.Surface" Class="chatroom-appbar">
@@ -14,8 +16,11 @@
                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="account-chip">
                     @auth.User.Identity?.Name
                 </MudChip>
-                <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="SignOut">
-                    Cerrar sesión
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Primary"
+                           Disabled="_isSigningOut"
+                           OnClick="SignOutAsync">
+                    @(_isSigningOut ? "Cerrando..." : "Cerrar sesión")
                 </MudButton>
             </Authorized>
             <NotAuthorized>
@@ -27,15 +32,50 @@
     </MudAppBar>
     <MudMainContent>
         <MudContainer MaxWidth="MaxWidth.Large" Class="page-container">
+            @if (AuthState.RestoreError is { } restoreError)
+            {
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
+                    @restoreError
+                </MudAlert>
+            }
             @Body
         </MudContainer>
     </MudMainContent>
 </MudLayout>
 
 @code {
-    private void SignOut()
+    private bool _isSigningOut;
+
+    private async Task SignOutAsync()
     {
-        AuthState.SignOut();
+        if (_isSigningOut)
+        {
+            return;
+        }
+
+        _isSigningOut = true;
+        try
+        {
+            await AuthApi.LogoutAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add(
+                "No se pudo confirmar el cierre de sesión en el servidor. La sesión local se cerró; vuelve a intentarlo si reaparece.",
+                Severity.Warning);
+        }
+        catch (TaskCanceledException)
+        {
+            Snackbar.Add(
+                "Users.API tardó demasiado en cerrar la sesión. La sesión local se cerró; vuelve a intentarlo si reaparece.",
+                Severity.Warning);
+        }
+        finally
+        {
+            AuthState.SignOut();
+            _isSigningOut = false;
+        }
+
         Navigation.NavigateTo("/login");
     }
 }

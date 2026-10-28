@@ -33,11 +33,23 @@ if (builder.Configuration["Cors:AllowedOrigins:0"] is { } frontendOrigin)
     allowedOrigins = [frontendOrigin];
 }
 
+var slidingExpirationDays = builder.Configuration.GetValue<int?>("RefreshTokens:SlidingExpirationDays") ?? 30;
+var absoluteExpirationDays = builder.Configuration.GetValue<int?>("RefreshTokens:AbsoluteExpirationDays") ?? 90;
+var concurrencyGraceSeconds = builder.Configuration.GetValue<int?>("RefreshTokens:ConcurrencyGraceSeconds") ?? 15;
+if (slidingExpirationDays < 1
+    || absoluteExpirationDays < slidingExpirationDays
+    || concurrencyGraceSeconds < 0)
+{
+    throw new InvalidOperationException(
+        "Refresh token lifetimes must be positive, the absolute lifetime must not be shorter than the sliding lifetime, and the concurrency grace period cannot be negative.");
+}
+
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
         policy.WithOrigins(allowedOrigins)
             .AllowAnyHeader()
-            .AllowAnyMethod()));
+            .AllowAnyMethod()
+            .AllowCredentials()));
 builder.Services.AddDbContext<UsersDbContext>(options =>
     options.UseSqlServer(connectionString));
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
@@ -68,6 +80,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+builder.Services.AddSingleton(TimeProvider.System);
 
 var app = builder.Build();
 

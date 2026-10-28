@@ -28,9 +28,6 @@ builder.Services.AddScoped(services => new HttpClient(
     BaseAddress = new Uri(threadApiAddress)
 });
 
-//builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(usersApiAddress) });
-// Soluciono creando un nuevo HttpClient para el AuthApiClient, ya que el creado por defecto no coincide la base addres.
-// Ver si a futuro es necesario agregar el encabezado de autorización en el AuthApiClient, ya que no es necesario para el login y registro.
 builder.Services.AddScoped(services => new AuthApiClient(
     new HttpClient
     {
@@ -39,4 +36,6 @@ builder.Services.AddScoped(services => new AuthApiClient(
 builder.Services.AddScoped<IThreadApiClient, ThreadApiClient>();
 builder.Services.AddMudServices();
 
-await builder.Build().RunAsync();
+var host = builder.Build();
+await host.Services.GetRequiredService<ChatAuthStateProvider>().InitializeAsync();
+await host.RunAsync();
