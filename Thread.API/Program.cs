@@ -61,6 +61,12 @@ builder.Services.AddHttpClient<IReplyApiClient, ReplyApiClient>(client =>
         ?? throw new InvalidOperationException("Configure ReplyApi:BaseAddress.");
     client.BaseAddress = new Uri(baseAddress);
 });
+builder.Services.AddHttpClient<IUserProfilesClient, UserProfilesClient>(client =>
+{
+    var baseAddress = builder.Configuration["UsersApi:BaseAddress"]
+        ?? throw new InvalidOperationException("Configure UsersApi:BaseAddress.");
+    client.BaseAddress = new Uri(baseAddress);
+});
 builder.Services.AddScoped<IThreadService, ThreadService>();
 builder.Services.AddSwaggerGen();
 builder.Services.AddOpenApi();

@@ -10,14 +10,23 @@ body {
     margin: 0;
 }
 
+.account-chip {
+    font-weight: 600 !important;
+    border-color: var(--mud-palette-primary-lighten);
+    color: var(--mud-palette-appbar-text);
+}
+
+.app-bar-user-menu button {
+    color: var(--mud-palette-appbar-text);
+}
+
 .chatroom-appbar {
     border-bottom: 1px solid #e8ebf2;
     color: #172033 !important;
-    padding-inline: max(24px, calc((100vw - 1200px) / 2));
 }
 
 .brand-mark {
-    color: #3949ab;
+    color: var(--mud-palette-appbar-text) !important;
     font-weight: 800 !important;
     letter-spacing: -0.04em !important;
 }
@@ -35,6 +44,10 @@ body {
     font-weight: 750 !important;
     letter-spacing: -0.04em !important;
     margin-bottom: 8px !important;
+}
+
+.account-panel {
+    padding: 32px 24px;
 }
 
 .threads-panel {

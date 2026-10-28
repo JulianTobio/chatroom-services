@@ -8,9 +8,13 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
+      UsersApi__BaseAddress: http://users-api:8080/
       ConnectionStrings__DefaultConnection: "Data Source=host.docker.internal,1433;Database=chatReply;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;Encrypt=True"
     ports:
       - "${REPLY_API_PORT:-5025}:8080"
+    depends_on:
+      users-api:
+        condition: service_started
 
   thread-api:
     image: chatroom-thread-api:latest
@@ -21,12 +25,15 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__DefaultConnection: "Data Source=host.docker.internal,1433;Database=chatThread;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;Encrypt=True"
       ReplyApi__BaseAddress: http://reply-api:8080/
+      UsersApi__BaseAddress: http://users-api:8080/
       Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
       Cors__AllowedOrigins__0: "http://localhost:${CHATROOM_PORT:-5017}"
     ports:
       - "${THREAD_API_PORT:-5026}:8080"
     depends_on:
       reply-api:
+        condition: service_started
+      users-api:
         condition: service_started
 
   chatroom:
@@ -52,3 +59,17 @@ services:
       Cors__AllowedOrigins__0: "http://localhost:${CHATROOM_PORT:-5017}"
     ports:
       - "${USERS_API_PORT:-5027}:8080"
+
+  chatbot-api:
+    image: chatroom-chatbot-api:latest
+    build:
+      context: ./ChatBot.API
+      dockerfile: Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
+      ChatBot__BaseAddress: ${OLLAMA_BASE_ADDRESS:-http://host.docker.internal:11434}
+      ChatBot__Model: ${OLLAMA_MODEL:-llama3.2:3b}
+      Cors__AllowedOrigins__0: "http://localhost:${CHATROOM_PORT:-5017}"
+    ports:
+      - "${CHATBOT_API_PORT:-5028}:8080"

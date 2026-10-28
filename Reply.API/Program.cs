@@ -43,6 +43,12 @@ builder.Services.AddDbContext<ReplyContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
 builder.Services.AddScoped<IReplyService, ReplyService>();
+builder.Services.AddHttpClient<IUserProfilesClient, UserProfilesClient>(client =>
+{
+    var baseAddress = builder.Configuration["UsersApi:BaseAddress"]
+        ?? throw new InvalidOperationException("Configure UsersApi:BaseAddress.");
+    client.BaseAddress = new Uri(baseAddress);
+});
 builder.Services.AddSwaggerGen();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi

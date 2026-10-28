@@ -5,9 +5,12 @@ using ThreadModel = Thread.API.Models.Thread;
 
 namespace Thread.API.Service;
 
-public class ThreadService(ThreadContext context, IReplyApiClient replyApiClient) : IThreadService
+public class ThreadService(
+    ThreadContext context,
+    IReplyApiClient replyApiClient,
+    IUserProfilesClient userProfilesClient) : IThreadService
 {
-    public async Task<PagedResult<ThreadModel>> GetAllAsync(int pageNumber, int pageSize)
+    public async Task<PagedResult<ThreadResponse>> GetAllAsync(int pageNumber, int pageSize)
     {
         var threads = context.Threads
             .OrderByDescending(thread => thread.Created)
@@ -17,10 +20,11 @@ public class ThreadService(ThreadContext context, IReplyApiClient replyApiClient
         var items = offset >= totalCount
             ? []
             : await threads.Skip((int)offset).Take(pageSize).ToListAsync();
+        var profiles = await userProfilesClient.GetByIdsAsync(items.Select(thread => thread.Author));
 
-        return new PagedResult<ThreadModel>
+        return new PagedResult<ThreadResponse>
         {
-            Items = items,
+            Items = items.Select(thread => ToResponse(thread, profiles)).ToList(),
             PageNumber = pageNumber,
             PageSize = pageSize,
             TotalCount = totalCount
@@ -32,11 +36,24 @@ public class ThreadService(ThreadContext context, IReplyApiClient replyApiClient
         return context.Threads.FirstOrDefaultAsync(thread => thread.Id == threadId);
     }
 
-    public async Task<ThreadModel> AddAsync(ThreadModel thread)
+    public async Task<ThreadResponse?> GetResponseAsync(int threadId)
+    {
+        var thread = await GetAsync(threadId);
+        if (thread is null)
+        {
+            return null;
+        }
+
+        var profiles = await userProfilesClient.GetByIdsAsync([thread.Author]);
+        return ToResponse(thread, profiles);
+    }
+
+    public async Task<ThreadResponse> AddAsync(ThreadModel thread)
     {
         await context.Threads.AddAsync(thread);
         await context.SaveChangesAsync();
-        return thread;
+        var profiles = await userProfilesClient.GetByIdsAsync([thread.Author]);
+        return ToResponse(thread, profiles);
     }
 
     public async Task<bool> UpdateAsync(int threadId, ThreadModel thread)
@@ -174,4 +191,19 @@ public class ThreadService(ThreadContext context, IReplyApiClient replyApiClient
             .ThenBy(reply => reply.Id)
             .ToList();
     }
+
+    private static ThreadResponse ToResponse(
+        ThreadModel thread,
+        IReadOnlyList<PublicUserProfile> profiles) =>
+        new()
+        {
+            Id = thread.Id,
+            Title = thread.Title,
+            Description = thread.Description,
+            Created = thread.Created,
+            Author = thread.Author,
+            AuthorProfile = profiles.FirstOrDefault(profile => profile.Id == thread.Author),
+            ReplyCount = thread.ReplyCount,
+            LastReplyTimestamp = thread.LastReplyTimestamp
+        };
 }

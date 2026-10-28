@@ -6,9 +6,11 @@ namespace Reply.API.Service
     {
         public Task<ReplyItem?> GetAsync(int replyId);
 
-        public Task<PagedResult<ReplyItem>> GetByTopicAsync(int topicId, int pageNumber, int pageSize);
+        public Task<ReplyResponse?> GetResponseAsync(int replyId);
 
-        public Task AddReplyAsync(ReplyItem item);
+        public Task<PagedResult<ReplyResponse>> GetByTopicAsync(int topicId, int pageNumber, int pageSize);
+
+        public Task<ReplyResponse> AddReplyAsync(ReplyItem item);
 
         public Task<bool> RemoveReplyAsync(int replyId, int userId);
 

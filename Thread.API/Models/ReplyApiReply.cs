@@ -7,4 +7,5 @@ public class ReplyApiReply
     public DateTime Date { get; set; }
     public int TopicId { get; set; }
     public int UserId { get; set; }
+    public PublicUserProfile? UserProfile { get; set; }
 }

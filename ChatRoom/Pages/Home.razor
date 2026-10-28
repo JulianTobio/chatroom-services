@@ -143,7 +143,17 @@
                     </MudStack>
                 </MudTd>
                 <MudTd DataLabel="Autor">
-                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">#@context.Author</MudChip>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                        @if (!string.IsNullOrWhiteSpace(context.AuthorProfile?.Image))
+                        {
+                            <MudAvatar Size="Size.Small">
+                                <MudImage Src="@context.AuthorProfile.Image" Alt="@context.AuthorProfile.Username" />
+                            </MudAvatar>
+                        }
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
+                            @(context.AuthorProfile?.Username ?? $"Usuario #{context.Author}")
+                        </MudChip>
+                    </MudStack>
                 </MudTd>
                 <MudTd DataLabel="Creado">@FormatDate(context.Created)</MudTd>
                 <MudTd DataLabel="Respuestas" Class="text-end">

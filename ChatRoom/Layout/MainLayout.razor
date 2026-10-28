@@ -10,21 +10,18 @@
             ChatRoom
         </MudLink>
         <MudSpacer />
-        <MudText Typo="Typo.body2" Color="Color.Secondary">Conversaciones de la comunidad</MudText>
         <AuthorizeView>
             <Authorized Context="auth">
-                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="account-chip">
+                <MudChip T="string" Size="Size.Medium" Variant="Variant.Outlined" Class="account-chip">
                     @auth.User.Identity?.Name
                 </MudChip>
-                <MudButton Variant="Variant.Text"
-                           Color="Color.Primary"
-                           Disabled="_isSigningOut"
-                           OnClick="SignOutAsync">
-                    @(_isSigningOut ? "Cerrando..." : "Cerrar sesión")
-                </MudButton>
+                <MudMenu Icon="@Icons.Material.Filled.MoreVert" AriaLabel="Open user menu" Class="app-bar-user-menu">
+                    <MudMenuItem Label="Perfil" />
+                    <MudMenuItem Label="Cerrar sesión" OnClick="SignOutAsync" />
+                </MudMenu>
             </Authorized>
             <NotAuthorized>
-                <MudButton Href="/login" Variant="Variant.Filled" Color="Color.Primary">
+                <MudButton Href="/login" Variant="Variant.Text" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Login">
                     Iniciar sesión
                 </MudButton>
             </NotAuthorized>

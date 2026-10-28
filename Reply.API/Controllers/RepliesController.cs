@@ -12,25 +12,38 @@ namespace Reply.API.Controllers
     public class RepliesController(IReplyService replyService) : ControllerBase
     {
         [HttpGet("{replyId:int}")]
-        public async Task<ActionResult<ReplyItem>> GetById(int replyId)
+        public async Task<ActionResult<ReplyResponse>> GetById(int replyId)
         {
-            var reply = await replyService.GetAsync(replyId);
-            return reply is null ? NotFound() : Ok(reply);
+            try
+            {
+                var reply = await replyService.GetResponseAsync(replyId);
+                return reply is null ? NotFound() : Ok(reply);
+            }
+            catch (HttpRequestException)
+            {
+                return ProfilesUnavailable();
+            }
         }
 
         [HttpGet("topic/{topicId:int}")]
-        public async Task<ActionResult<PagedResult<ReplyItem>>> GetByTopic(
+        public async Task<ActionResult<PagedResult<ReplyResponse>>> GetByTopic(
             int topicId,
             [FromQuery, Range(1, int.MaxValue)] int pageNumber = 1,
             [FromQuery, Range(1, 100)] int pageSize = 10)
         {
-            var result = await replyService.GetByTopicAsync(topicId, pageNumber, pageSize);
-            return Ok(result);
+            try
+            {
+                return Ok(await replyService.GetByTopicAsync(topicId, pageNumber, pageSize));
+            }
+            catch (HttpRequestException)
+            {
+                return ProfilesUnavailable();
+            }
         }
 
         [HttpPost]
         [Authorize]
-        public async Task<ActionResult<ReplyItem>> Create(CreateReplyRequest request)
+        public async Task<ActionResult<ReplyResponse>> Create(CreateReplyRequest request)
         {
             if (!TryGetUserId(out var userId))
             {
@@ -45,8 +58,15 @@ namespace Reply.API.Controllers
                 UserId = userId
             };
 
-            await replyService.AddReplyAsync(item);
-            return CreatedAtAction(nameof(GetById), new { replyId = item.Id }, item);
+            try
+            {
+                var response = await replyService.AddReplyAsync(item);
+                return CreatedAtAction(nameof(GetById), new { replyId = item.Id }, response);
+            }
+            catch (HttpRequestException)
+            {
+                return ProfilesUnavailable();
+            }
         }
 
         [HttpPut("{replyId:int}")]
@@ -80,5 +100,11 @@ namespace Reply.API.Controllers
             var id = User.FindFirstValue(ClaimTypes.NameIdentifier);
             return int.TryParse(id, out userId);
         }
+
+        private ObjectResult ProfilesUnavailable() =>
+            Problem(
+                statusCode: StatusCodes.Status502BadGateway,
+                title: "Users.API request failed",
+                detail: "The public user profiles could not be loaded from Users.API.");
     }
 }

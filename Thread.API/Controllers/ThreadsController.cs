@@ -13,18 +13,32 @@ namespace Thread.API.Controllers;
 public class ThreadsController(IThreadService threadService) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<PagedResult<ThreadModel>>> GetAll(
+    public async Task<ActionResult<PagedResult<ThreadResponse>>> GetAll(
         [FromQuery, Range(1, int.MaxValue)] int pageNumber = 1,
         [FromQuery, Range(1, 100)] int pageSize = 10)
     {
-        return Ok(await threadService.GetAllAsync(pageNumber, pageSize));
+        try
+        {
+            return Ok(await threadService.GetAllAsync(pageNumber, pageSize));
+        }
+        catch (HttpRequestException)
+        {
+            return ProfilesUnavailable();
+        }
     }
 
     [HttpGet("{threadId:int}")]
-    public async Task<ActionResult<ThreadModel>> GetById(int threadId)
+    public async Task<ActionResult<ThreadResponse>> GetById(int threadId)
     {
-        var thread = await threadService.GetAsync(threadId);
-        return thread is null ? NotFound() : Ok(thread);
+        try
+        {
+            var thread = await threadService.GetResponseAsync(threadId);
+            return thread is null ? NotFound() : Ok(thread);
+        }
+        catch (HttpRequestException)
+        {
+            return ProfilesUnavailable();
+        }
     }
 
     [HttpGet("{threadId:int}/replies")]
@@ -46,7 +60,7 @@ public class ThreadsController(IThreadService threadService) : ControllerBase
 
     [HttpPost]
     [Authorize]
-    public async Task<ActionResult<ThreadModel>> Create(CreateThreadRequest request)
+    public async Task<ActionResult<ThreadResponse>> Create(CreateThreadRequest request)
     {
         if (!TryGetUserId(out var userId))
         {
@@ -61,8 +75,15 @@ public class ThreadsController(IThreadService threadService) : ControllerBase
             Author = userId
         };
 
-        await threadService.AddAsync(thread);
-        return CreatedAtAction(nameof(GetById), new { threadId = thread.Id }, thread);
+        try
+        {
+            var response = await threadService.AddAsync(thread);
+            return CreatedAtAction(nameof(GetById), new { threadId = thread.Id }, response);
+        }
+        catch (HttpRequestException)
+        {
+            return ProfilesUnavailable();
+        }
     }
 
     [HttpPut("{threadId:int}")]
@@ -169,4 +190,10 @@ public class ThreadsController(IThreadService threadService) : ControllerBase
         var id = User.FindFirstValue(ClaimTypes.NameIdentifier);
         return int.TryParse(id, out userId);
     }
+
+    private ObjectResult ProfilesUnavailable() =>
+        Problem(
+            statusCode: StatusCodes.Status502BadGateway,
+            title: "Users.API request failed",
+            detail: "The public user profiles could not be loaded from Users.API.");
 }

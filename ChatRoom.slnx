@@ -3,4 +3,5 @@
   <Project Path="Thread.API/Thread.API.csproj" />
   <Project Path="ChatRoom/ChatRoom.csproj" />
   <Project Path="Users.API/Users.API.csproj" />
+  <Project Path="ChatBot.API/ChatBot.API.csproj" />
 </Solution>

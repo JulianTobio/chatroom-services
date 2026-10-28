@@ -32,7 +32,15 @@
                 <MudText Typo="Typo.h4" Class="heading-title">@_thread.Title</MudText>
                 <MudText Typo="Typo.body1" Color="Color.Secondary">@_thread.Description</MudText>
                 <MudStack Row="true" Spacing="2" Class="thread-meta">
-                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Autor #@_thread.Author</MudChip>
+                    @if (!string.IsNullOrWhiteSpace(_thread.AuthorProfile?.Image))
+                    {
+                        <MudAvatar Size="Size.Small">
+                            <MudImage Src="@_thread.AuthorProfile.Image" Alt="@_thread.AuthorProfile.Username" />
+                        </MudAvatar>
+                    }
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
+                        @(_thread.AuthorProfile?.Username ?? $"Usuario #{_thread.Author}")
+                    </MudChip>
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
                         @_replies.Count respuesta(s)
                     </MudChip>
@@ -64,7 +72,17 @@
                                       Class="@GetMessageBubbleClass(reply)">
                                 <MudText Typo="Typo.body1" Class="message-content">@reply.Content</MudText>
                                 <MudStack Row="true" Justify="Justify.SpaceBetween" Spacing="3" Class="message-meta">
-                                    <MudText Typo="Typo.caption">Usuario #@reply.UserId</MudText>
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                        @if (!string.IsNullOrWhiteSpace(reply.UserProfile?.Image))
+                                        {
+                                            <MudAvatar Size="Size.Small">
+                                                <MudImage Src="@reply.UserProfile.Image" Alt="@reply.UserProfile.Username" />
+                                            </MudAvatar>
+                                        }
+                                        <MudText Typo="Typo.caption">
+                                            @(reply.UserProfile?.Username ?? $"Usuario #{reply.UserId}")
+                                        </MudText>
+                                    </MudStack>
                                     <MudText Typo="Typo.caption">@FormatDate(reply.Date)</MudText>
                                 </MudStack>
                             </MudPaper>
