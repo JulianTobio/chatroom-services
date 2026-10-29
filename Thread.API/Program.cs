@@ -3,11 +3,13 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Thread.API.Data;
+using Thread.API.Hubs;
 using Thread.API.Service;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
 var jwtIssuer = builder.Configuration["Jwt:Issuer"]
     ?? throw new InvalidOperationException("Configure Jwt:Issuer.");
 var jwtAudience = builder.Configuration["Jwt:Audience"]
@@ -68,6 +70,7 @@ builder.Services.AddHttpClient<IUserProfilesClient, UserProfilesClient>(client =
     client.BaseAddress = new Uri(baseAddress);
 });
 builder.Services.AddScoped<IThreadService, ThreadService>();
+builder.Services.AddSingleton<IThreadUpdatesPublisher, ThreadUpdatesPublisher>();
 builder.Services.AddSwaggerGen();
 builder.Services.AddOpenApi();
 
@@ -84,6 +87,7 @@ app.UseHttpsRedirection();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapHub<ThreadUpdatesHub>("/hubs/threads");
 app.MapControllers();
 
 app.Run();

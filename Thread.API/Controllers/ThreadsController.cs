@@ -10,7 +10,9 @@ namespace Thread.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ThreadsController(IThreadService threadService) : ControllerBase
+public class ThreadsController(
+    IThreadService threadService,
+    IThreadUpdatesPublisher threadUpdatesPublisher) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<PagedResult<ThreadResponse>>> GetAll(
@@ -78,6 +80,7 @@ public class ThreadsController(IThreadService threadService) : ControllerBase
         try
         {
             var response = await threadService.AddAsync(thread);
+            await threadUpdatesPublisher.PublishAsync(thread.Id, "thread-created");
             return CreatedAtAction(nameof(GetById), new { threadId = thread.Id }, response);
         }
         catch (HttpRequestException)
@@ -111,7 +114,13 @@ public class ThreadsController(IThreadService threadService) : ControllerBase
             Description = request.Description
         };
 
-        return await threadService.UpdateAsync(threadId, thread) ? NoContent() : NotFound();
+        if (!await threadService.UpdateAsync(threadId, thread))
+        {
+            return NotFound();
+        }
+
+        await threadUpdatesPublisher.PublishAsync(threadId, "thread-updated");
+        return NoContent();
     }
 
     [HttpDelete("{threadId:int}")]
@@ -133,7 +142,13 @@ public class ThreadsController(IThreadService threadService) : ControllerBase
             return Forbid();
         }
 
-        return await threadService.RemoveAsync(threadId) ? NoContent() : NotFound();
+        if (!await threadService.RemoveAsync(threadId))
+        {
+            return NotFound();
+        }
+
+        await threadUpdatesPublisher.PublishAsync(threadId, "thread-deleted");
+        return NoContent();
     }
 
     [HttpPost("{threadId:int}/replies")]
@@ -150,6 +165,11 @@ public class ThreadsController(IThreadService threadService) : ControllerBase
             var reply = await threadService.CreateReplyAsync(
                 threadId,
                 new CreateThreadReplyRequest { Content = request.Content });
+            if (reply is not null)
+            {
+                await threadUpdatesPublisher.PublishAsync(threadId, "reply-created");
+            }
+
             return reply is null ? NotFound() : StatusCode(StatusCodes.Status201Created, reply);
         }
         catch (HttpRequestException)
@@ -172,9 +192,13 @@ public class ThreadsController(IThreadService threadService) : ControllerBase
 
         try
         {
-            return await threadService.DeleteReplyAsync(threadId, replyId, userId)
-                ? NoContent()
-                : NotFound();
+            if (!await threadService.DeleteReplyAsync(threadId, replyId, userId))
+            {
+                return NotFound();
+            }
+
+            await threadUpdatesPublisher.PublishAsync(threadId, "reply-deleted");
+            return NoContent();
         }
         catch (HttpRequestException)
         {

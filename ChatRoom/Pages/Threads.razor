@@ -2,6 +2,9 @@
 @inject IThreadApiClient ThreadApi
 @inject IJSRuntime JS
 @inject ChatAuthStateProvider AuthState
+@inject ThreadUpdatesClient ThreadUpdates
+@inject ILogger<Threads> Logger
+@implements IAsyncDisposable
 
 <PageTitle>@(_thread is null ? "Conversación | ChatRoom" : $"{_thread.Title} | ChatRoom")</PageTitle>
 
@@ -51,6 +54,13 @@
             {
                 <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="reply-error">
                     @_loadError
+                </MudAlert>
+            }
+
+            @if (_realtimeError is not null)
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="reply-error">
+                    @_realtimeError
                 </MudAlert>
             }
 
@@ -143,50 +153,104 @@
     public int ThreadId { get; set; }
 
     private int CurrentUserId => AuthState.User?.Id ?? 0;
+    private readonly SemaphoreSlim _conversationLoadLock = new(1, 1);
     private ThreadItem? _thread;
     private List<ReplyItem> _replies = [];
     private ElementReference _messagesContainer;
     private string _replyContent = string.Empty;
     private string? _loadError;
     private string? _replyError;
+    private string? _realtimeError;
     private bool _isLoading = true;
     private bool _isSending;
     private bool _shouldScrollToBottom;
+    private int? _subscribedThreadId;
+
+    protected override void OnInitialized()
+    {
+        ThreadUpdates.ThreadChanged += HandleThreadChangedAsync;
+        ThreadUpdates.Reconnected += HandleReconnectedAsync;
+    }
 
     protected override async Task OnParametersSetAsync()
     {
+        await UpdateThreadSubscriptionAsync();
         _isLoading = true;
         _loadError = null;
         _replyError = null;
         _thread = null;
         _replies = [];
 
+        await LoadConversationAsync();
+    }
+
+    private async Task LoadConversationAsync()
+    {
+        await _conversationLoadLock.WaitAsync();
         try
         {
-            _thread = await ThreadApi.GetByIdAsync(ThreadId);
-            if (_thread is null)
+            _loadError = null;
+            try
             {
-                return;
-            }
+                _thread = await ThreadApi.GetByIdAsync(ThreadId);
+                if (_thread is null)
+                {
+                    _replies = [];
+                    return;
+                }
 
-            var replies = await ThreadApi.GetRepliesAsync(ThreadId);
-            _replies = replies
-                .OrderBy(reply => reply.Date)
-                .ThenBy(reply => reply.Id)
-                .ToList();
-            _shouldScrollToBottom = true;
-        }
-        catch (HttpRequestException)
-        {
-            _loadError = "No se pudo cargar la conversación. Comprueba que Thread.API y Reply.API estén disponibles.";
-        }
-        catch (System.Text.Json.JsonException)
-        {
-            _loadError = "La API devolvió una respuesta que no se pudo interpretar.";
+                var replies = await ThreadApi.GetRepliesAsync(ThreadId);
+                _replies = replies
+                    .OrderBy(reply => reply.Date)
+                    .ThenBy(reply => reply.Id)
+                    .ToList();
+                _shouldScrollToBottom = true;
+            }
+            catch (HttpRequestException)
+            {
+                _loadError = "No se pudo cargar la conversación. Comprueba que Thread.API y Reply.API estén disponibles.";
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                _loadError = "La API devolvió una respuesta que no se pudo interpretar.";
+            }
+            finally
+            {
+                _isLoading = false;
+            }
         }
         finally
         {
-            _isLoading = false;
+            _conversationLoadLock.Release();
+        }
+    }
+
+    private async Task UpdateThreadSubscriptionAsync()
+    {
+        if (_subscribedThreadId == ThreadId)
+        {
+            return;
+        }
+
+        if (_subscribedThreadId is { } previousThreadId)
+        {
+            await ThreadUpdates.UnsubscribeFromThreadAsync(previousThreadId);
+        }
+
+        _subscribedThreadId = ThreadId;
+
+        try
+        {
+            await ThreadUpdates.SubscribeToThreadAsync(ThreadId);
+            _realtimeError = null;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(
+                exception,
+                "Real-time updates could not be started for thread {ThreadId}.",
+                ThreadId);
+            _realtimeError = "Las actualizaciones automáticas no están disponibles. Puedes volver a cargar la página.";
         }
     }
 
@@ -210,20 +274,15 @@
         _replyError = null;
         try
         {
-            var createdReply = await ThreadApi.CreateReplyAsync(
+            await ThreadApi.CreateReplyAsync(
                 ThreadId,
                 new CreateReplyRequest
                 {
                     Content = _replyContent.Trim()
                 });
 
-            _replies.Add(createdReply);
-            _replies = _replies
-                .OrderBy(reply => reply.Date)
-                .ThenBy(reply => reply.Id)
-                .ToList();
             _replyContent = string.Empty;
-            _shouldScrollToBottom = true;
+            await LoadConversationAsync();
         }
         catch (HttpRequestException)
         {
@@ -257,4 +316,24 @@
         reply.UserId == CurrentUserId
             ? "message-bubble message-bubble-own"
             : "message-bubble";
+
+    private Task HandleThreadChangedAsync(int threadId, string changeType) =>
+        threadId == ThreadId ? InvokeAsync(LoadConversationAsync) : Task.CompletedTask;
+
+    private Task HandleReconnectedAsync() =>
+        InvokeAsync(async () =>
+        {
+            _realtimeError = null;
+            await LoadConversationAsync();
+        });
+
+    public async ValueTask DisposeAsync()
+    {
+        ThreadUpdates.ThreadChanged -= HandleThreadChangedAsync;
+        ThreadUpdates.Reconnected -= HandleReconnectedAsync;
+        if (_subscribedThreadId is { } threadId)
+        {
+            await ThreadUpdates.UnsubscribeFromThreadAsync(threadId);
+        }
+    }
 }

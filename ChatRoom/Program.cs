@@ -27,6 +27,9 @@ builder.Services.AddScoped(services => new HttpClient(
 {
     BaseAddress = new Uri(threadApiAddress)
 });
+builder.Services.AddScoped(services => new ThreadUpdatesClient(
+    new Uri(threadApiAddress),
+    services.GetRequiredService<ILogger<ThreadUpdatesClient>>()));
 
 builder.Services.AddScoped(services => new AuthApiClient(
     new HttpClient

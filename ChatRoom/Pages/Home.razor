@@ -1,5 +1,8 @@
 ﻿@page "/"
 @inject IThreadApiClient ThreadApi
+@inject ThreadUpdatesClient ThreadUpdates
+@inject ILogger<Home> Logger
+@implements IAsyncDisposable
 
 <PageTitle>Hilos | ChatRoom</PageTitle>
 
@@ -110,6 +113,13 @@
         </MudAlert>
     }
 
+    @if (_realtimeError is not null)
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" ShowCloseIcon="true">
+            @_realtimeError
+        </MudAlert>
+    }
+
     <MudPaper Elevation="0" Outlined="true" Class="threads-panel">
         <MudTable @ref="_table"
                   T="ThreadItem"
@@ -196,6 +206,23 @@
     private string? _createError;
     private string? _createSuccess;
     private string? _loadError;
+    private string? _realtimeError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ThreadUpdates.ThreadChanged += HandleThreadChangedAsync;
+        ThreadUpdates.Reconnected += HandleReconnectedAsync;
+
+        try
+        {
+            await ThreadUpdates.SubscribeToThreadListAsync();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "Thread list real-time updates could not be started.");
+            _realtimeError = "Las actualizaciones automáticas no están disponibles. Puedes actualizar la lista manualmente.";
+        }
+    }
 
     private async Task<TableData<ThreadItem>> LoadThreads(TableState state, CancellationToken cancellationToken)
     {
@@ -240,6 +267,16 @@
             await _table.ReloadServerData();
         }
     }
+
+    private Task HandleThreadChangedAsync(int threadId, string changeType) =>
+        InvokeAsync(RefreshThreads);
+
+    private Task HandleReconnectedAsync() =>
+        InvokeAsync(async () =>
+        {
+            _realtimeError = null;
+            await RefreshThreads();
+        });
 
     private void ToggleCreateForm()
     {
@@ -291,6 +328,13 @@
         {
             _isCreating = false;
         }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        ThreadUpdates.ThreadChanged -= HandleThreadChangedAsync;
+        ThreadUpdates.Reconnected -= HandleReconnectedAsync;
+        await ThreadUpdates.UnsubscribeFromThreadListAsync();
     }
 
     private static string FormatDate(DateTime date) =>

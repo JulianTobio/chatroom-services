@@ -26,6 +26,8 @@ ChatBot.API expone `POST /api/chat` y requiere un JWT de Users.API. El cuerpo ac
 
 ChatBot.API usa Microsoft.Extensions.AI (`IChatClient`) con OllamaSharp como proveedor. Instalar y arrancar Ollama en el host, descargar el modelo configurado (por defecto `llama3.2`) con `ollama pull llama3.2` y ejecutar `docker compose up --build`. En Compose, la API se conecta por defecto a `http://host.docker.internal:11434`; se puede cambiar con `OLLAMA_BASE_ADDRESS` y `OLLAMA_MODEL`. Para ejecutarla localmente fuera de Docker, la dirección por defecto es `http://localhost:11434`. El endpoint devuelve HTTP 503 si Ollama no está disponible.
 
+Thread.API publica notificaciones SignalR en `/hubs/threads` cuando se crea, edita o elimina un hilo o una respuesta mediante sus endpoints. ChatRoom se suscribe a la lista general o al hilo abierto y, al recibir `ThreadChanged`, vuelve a consultar los datos por REST. Tras conectar, SignalR reintenta automáticamente y ChatRoom vuelve a cargar los datos al reconectarse; los eventos no se almacenan, así que los cambios durante una desconexión se recuperan al reconectar. SignalR sólo transporta el identificador del hilo y el tipo de cambio. La configuración actual supone una instancia de Thread.API; para escalar a varias instancias se deberá agregar un backplane de SignalR.
+
 Ejemplo de solicitud autenticada:
 
 ```json
