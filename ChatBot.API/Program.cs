@@ -11,7 +11,6 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddSwaggerGen();
-builder.Services.AddMemoryCache();
 
 var jwtIssuer = builder.Configuration["Jwt:Issuer"]
     ?? throw new InvalidOperationException("Configure Jwt:Issuer.");
@@ -61,8 +60,8 @@ builder.Services.AddOptions<ChatBotOptions>()
         && (address.Scheme == Uri.UriSchemeHttp || address.Scheme == Uri.UriSchemeHttps),
         "ChatBot:BaseAddress must be an absolute HTTP or HTTPS URL.")
     .Validate(options => !string.IsNullOrWhiteSpace(options.Model), "ChatBot:Model is required.")
-    .Validate(options => options.ConversationIdleTimeoutMinutes > 0, "ChatBot:ConversationIdleTimeoutMinutes must be positive.")
-    .Validate(options => options.MaxHistoryTurns > 0, "ChatBot:MaxHistoryTurns must be positive.")
+    .Validate(options => Encoding.UTF8.GetByteCount(options.InternalApiKey) >= 32,
+        "ChatBot:InternalApiKey must contain at least 32 bytes.")
     .ValidateOnStart();
 
 builder.Services.AddSingleton<IChatClient>(serviceProvider =>

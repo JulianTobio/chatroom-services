@@ -12,6 +12,8 @@ namespace Reply.API.Service
 
         public Task<ReplyResponse> AddReplyAsync(ReplyItem item);
 
+        public Task<ReplyResponse> AddChatBotReplyAsync(ReplyItem item);
+
         public Task<bool> RemoveReplyAsync(int replyId, int userId);
 
         public Task<int> UpdateReplyAsync(int replyId, int userId, string content);

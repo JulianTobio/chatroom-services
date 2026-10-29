@@ -1,10 +1,10 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.ComponentModel.DataAnnotations;
+using System.Security.Cryptography;
+using System.Text;
 using ChatBot.API.Models;
 using ChatBot.API.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using OllamaSharp.Models.Exceptions;
 
 namespace ChatBot.API.Controllers;
@@ -14,8 +14,11 @@ namespace ChatBot.API.Controllers;
 [Route("api/[controller]")]
 public sealed class ChatController(
     IChatService chatService,
+    IOptions<ChatBotOptions> options,
     ILogger<ChatController> logger) : ControllerBase
 {
+    private const string InternalApiKeyHeader = "X-ChatBot-Service-Key";
+
     [HttpPost]
     [ProducesResponseType<ChatResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -24,40 +27,37 @@ public sealed class ChatController(
         [FromBody] ChatRequest request,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.Message))
-        {
-            return BadRequest(new ValidationProblemDetails(
-                new Dictionary<string, string[]>
-                {
-                    [nameof(request.Message)] = ["Message cannot be empty."]
-                }));
-        }
+        return await GenerateAsync(request, cancellationToken);
+    }
 
-        if (request.ConversationId == Guid.Empty)
-        {
-            return BadRequest(new ValidationProblemDetails(
-                new Dictionary<string, string[]>
-                {
-                    [nameof(request.ConversationId)] = ["ConversationId cannot be an empty GUID."]
-                }));
-        }
-
-        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue(JwtRegisteredClaimNames.Sub);
-        if (!int.TryParse(userIdClaim, out var userId))
+    [AllowAnonymous]
+    [HttpPost("internal")]
+    [ProducesResponseType<ChatResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<ChatResponse>> SendInternal(
+        [FromBody] ChatRequest request,
+        CancellationToken cancellationToken)
+    {
+        var configuredKey = Encoding.UTF8.GetBytes(options.Value.InternalApiKey);
+        var providedKey = Encoding.UTF8.GetBytes(
+            Request.Headers[InternalApiKeyHeader].ToString());
+        if (providedKey.Length != configuredKey.Length
+            || !CryptographicOperations.FixedTimeEquals(providedKey, configuredKey))
         {
             return Unauthorized();
         }
 
-        var conversationId = request.ConversationId ?? Guid.NewGuid();
+        return await GenerateAsync(request, cancellationToken);
+    }
+
+    private async Task<ActionResult<ChatResponse>> GenerateAsync(
+        ChatRequest request,
+        CancellationToken cancellationToken)
+    {
         try
         {
-            var response = await chatService.SendAsync(
-                userId,
-                conversationId,
-                request.Message,
-                cancellationToken);
-            return Ok(response);
+            return Ok(await chatService.SendAsync(request.Message, cancellationToken));
         }
         catch (HttpRequestException exception)
         {

@@ -132,7 +132,7 @@
                         </MudButton>
                     </div>
                     <MudText Typo="Typo.caption" Color="Color.Secondary" Class="composer-hint">
-                        Enviar con Ctrl + Enter
+                        Enviar con Ctrl + Enter. Menciona @@chatbot para pedir una respuesta automática.
                     </MudText>
                 </Authorized>
                 <NotAuthorized>
@@ -148,7 +148,7 @@
     }
 </MudStack>
 
-@code {
+    @code {
     [Parameter]
     public int ThreadId { get; set; }
 
@@ -317,14 +317,25 @@
             ? "message-bubble message-bubble-own"
             : "message-bubble";
 
-    private Task HandleThreadChangedAsync(int threadId, string changeType) =>
-        threadId == ThreadId ? InvokeAsync(LoadConversationAsync) : Task.CompletedTask;
+    private Task HandleThreadChangedAsync(int threadId, string changeType) {
+        if (threadId == ThreadId)
+        {
+            return InvokeAsync(async () =>
+            {
+                await LoadConversationAsync();
+                StateHasChanged();
+            });
+        }
+
+        return Task.CompletedTask;
+    }
 
     private Task HandleReconnectedAsync() =>
         InvokeAsync(async () =>
         {
             _realtimeError = null;
             await LoadConversationAsync();
+            StateHasChanged();
         });
 
     public async ValueTask DisposeAsync()

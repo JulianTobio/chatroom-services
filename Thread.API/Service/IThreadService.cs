@@ -19,6 +19,11 @@ public interface IThreadService
 
     Task<ReplyApiReply?> CreateReplyAsync(int threadId, CreateThreadReplyRequest request);
 
+    Task<ReplyApiReply?> CreateChatBotReplyAsync(
+        int threadId,
+        string content,
+        CancellationToken cancellationToken);
+
     Task<bool> DeleteReplyAsync(int threadId, int replyId, int userId);
 
     Task<IReadOnlyList<ReplyApiReply>?> GetRepliesAsync(int threadId);

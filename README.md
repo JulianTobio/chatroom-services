@@ -2,7 +2,7 @@
 
 ## Ejecutar con Docker Compose
 
-1. Copiar `.env.example` a `.env` y cambiar `MSSQL_SA_PASSWORD` y `JWT_SIGNING_KEY` por secretos propios y seguros. Generar la clave JWT con al menos 32 bytes aleatorios; no reutilizar la contraseña de SQL Server.
+1. Copiar `.env.example` a `.env` y cambiar `MSSQL_SA_PASSWORD`, `JWT_SIGNING_KEY` y `CHATBOT_INTERNAL_API_KEY` por secretos propios y seguros. Generar las claves JWT e interna con al menos 32 bytes aleatorios; no reutilizar la contraseña de SQL Server.
 2. Crear y ejecutar las imágenes y contenedores:
 
    ```powershell
@@ -22,22 +22,23 @@ La página principal consume la API paginada de `Thread.API`. Cada hilo abre su 
 
 Users.API expone `POST /api/users/profiles`, que recibe `{ "userIds": [1, 2] }` y devuelve únicamente `id`, `username` e `image` para los perfiles existentes (máximo 100 por solicitud). La ruta es pública porque sólo expone información pública de perfil.
 
-ChatBot.API expone `POST /api/chat` y requiere un JWT de Users.API. El cuerpo acepta `message` y un `conversationId` opcional; al omitirlo, la respuesta devuelve un nuevo identificador que debe enviarse en los siguientes mensajes para conservar el contexto. El historial se mantiene en memoria, asociado al usuario autenticado y al identificador de conversación; expira tras 30 minutos de inactividad y se pierde al reiniciar el servicio. Se conservan hasta 10 turnos por conversación.
+ChatBot.API expone `POST /api/chat` y requiere un JWT de Users.API. Cada petición se procesa sin historial ni contexto conversacional. Thread.API utiliza el endpoint interno `POST /api/chat/internal`, protegido con `CHATBOT_INTERNAL_API_KEY`.
 
-ChatBot.API usa Microsoft.Extensions.AI (`IChatClient`) con OllamaSharp como proveedor. Instalar y arrancar Ollama en el host, descargar el modelo configurado (por defecto `llama3.2`) con `ollama pull llama3.2` y ejecutar `docker compose up --build`. En Compose, la API se conecta por defecto a `http://host.docker.internal:11434`; se puede cambiar con `OLLAMA_BASE_ADDRESS` y `OLLAMA_MODEL`. Para ejecutarla localmente fuera de Docker, la dirección por defecto es `http://localhost:11434`. El endpoint devuelve HTTP 503 si Ollama no está disponible.
+ChatBot.API usa Microsoft.Extensions.AI (`IChatClient`) con OllamaSharp como proveedor. Instalar y arrancar Ollama en el host, descargar el modelo configurado (por defecto `llama3.2:3b`) con `ollama pull llama3.2:3b` y ejecutar `docker compose up --build`. En Compose, la API se conecta por defecto a `http://host.docker.internal:11434`; se puede cambiar con `OLLAMA_BASE_ADDRESS` y `OLLAMA_MODEL`. Para ejecutarla localmente fuera de Docker, la dirección por defecto es `http://localhost:11434`. El endpoint devuelve HTTP 503 si Ollama no está disponible.
+
+Para asignar respuestas automáticas a una cuenta dedicada, registrar primero desde ChatRoom una cuenta para el bot (por ejemplo, `chatbot`) y configurar en `.env` el ID entero devuelto por Users.API como `CHATBOT_USER_ID`. Reply.API asigna ese ID en el servidor al guardar una respuesta interna del bot; el cliente no puede elegirlo. `CHATBOT_INTERNAL_API_KEY` se comparte sólo entre Thread.API, Reply.API y ChatBot.API, y protege las llamadas internas.
+
+Al crear una reply cuyo cuerpo menciona `@chatbot` como palabra completa y contiene texto adicional, Thread.API guarda y devuelve la reply original sin esperar al modelo. Luego, su cola en memoria procesa el texto sin la mención, solicita una respuesta independiente a ChatBot.API y publica una segunda reply atribuida al usuario `CHATBOT_USER_ID`. Al guardarse la respuesta del bot, Thread.API emite el evento SignalR existente y ChatRoom recarga la conversación automáticamente. La cola tiene capacidad máxima de 1000 trabajos, no es durable y no reintenta: un reinicio o una cola llena puede dejar una mención sin respuesta, y los fallos se registran en el log.
 
 Thread.API publica notificaciones SignalR en `/hubs/threads` cuando se crea, edita o elimina un hilo o una respuesta mediante sus endpoints. ChatRoom se suscribe a la lista general o al hilo abierto y, al recibir `ThreadChanged`, vuelve a consultar los datos por REST. Tras conectar, SignalR reintenta automáticamente y ChatRoom vuelve a cargar los datos al reconectarse; los eventos no se almacenan, así que los cambios durante una desconexión se recuperan al reconectar. SignalR sólo transporta el identificador del hilo y el tipo de cambio. La configuración actual supone una instancia de Thread.API; para escalar a varias instancias se deberá agregar un backplane de SignalR.
 
-Ejemplo de solicitud autenticada:
+Ejemplo de solicitud autenticada a ChatBot.API:
 
 ```json
 {
-  "message": "Hola, ¿puedes resumir lo que hablamos?",
-  "conversationId": "c1b6b348-45aa-4ba8-8b5a-9b18e7d8b640"
+  "message": "¿Qué opinas sobre esta propuesta?"
 }
 ```
-
-En el primer mensaje puede omitirse `conversationId`; se debe reutilizar el identificador de la respuesta en los mensajes posteriores.
 
 Los proyectos todavía requieren aplicar las migraciones antes de usar sus endpoints de base de datos. Con Docker Compose activo, configurar la conexión desde PowerShell y aplicar ambas:
 
@@ -58,7 +59,11 @@ dotnet user-secrets set "Jwt:SigningKey" "<JWT_SIGNING_KEY_DE_AL_MENOS_32_BYTES>
 dotnet user-secrets set "Jwt:SigningKey" "<JWT_SIGNING_KEY_DE_AL_MENOS_32_BYTES>" --project Reply.API\Reply.API.csproj
 dotnet user-secrets set "Jwt:SigningKey" "<JWT_SIGNING_KEY_DE_AL_MENOS_32_BYTES>" --project Thread.API\Thread.API.csproj
 dotnet user-secrets set "Jwt:SigningKey" "<JWT_SIGNING_KEY_DE_AL_MENOS_32_BYTES>" --project ChatBot.API\ChatBot.API.csproj
+dotnet user-secrets set "ChatBotApi:InternalApiKey" "<CHATBOT_INTERNAL_API_KEY_DE_AL_MENOS_32_BYTES>" --project Thread.API\Thread.API.csproj
+dotnet user-secrets set "ChatBot:InternalApiKey" "<CHATBOT_INTERNAL_API_KEY_DE_AL_MENOS_32_BYTES>" --project Reply.API\Reply.API.csproj
+dotnet user-secrets set "ChatBot:InternalApiKey" "<CHATBOT_INTERNAL_API_KEY_DE_AL_MENOS_32_BYTES>" --project ChatBot.API\ChatBot.API.csproj
+dotnet user-secrets set "ChatBot:UserId" "<ID_NUMERICO_DE_LA_CUENTA_CHATBOT>" --project Reply.API\Reply.API.csproj
 dotnet ef database update --project Users.API\Users.API.csproj --startup-project Users.API\Users.API.csproj
 ```
 
-En Compose, establecer `JWT_SIGNING_KEY` en `.env`; nunca guardar una clave real en el repositorio. La política CORS de Users.API permite credenciales sólo para los orígenes configurados y los endpoints que emiten, renuevan o revocan cookies validan el encabezado `Origin`. Web y APIs deben compartir el mismo sitio para que `SameSite=Lax` funcione; la cookie es host-only, HttpOnly y Secure fuera de Development.
+El valor de la clave interna debe ser el mismo en Reply.API, Thread.API y ChatBot.API. Para Compose, crear primero desde ChatRoom una cuenta dedicada (por ejemplo, username `chatbot`) y copiar su ID numérico a `CHATBOT_USER_ID` en `.env`; luego establecer `CHATBOT_INTERNAL_API_KEY` con un secreto aleatorio de al menos 32 bytes. Nunca guardar una clave real en el repositorio. La política CORS de Users.API permite credenciales sólo para los orígenes configurados y los endpoints que emiten, renuevan o revocan cookies validan el encabezado `Origin`. Web y APIs deben compartir el mismo sitio para que `SameSite=Lax` funcione; la cookie es host-only, HttpOnly y Secure fuera de Development.

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Thread.API.Data;
 using Thread.API.Hubs;
+using Thread.API.Models;
 using Thread.API.Service;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -57,11 +58,36 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 builder.Services.AddDbContext<ThreadContext>(options =>
     options.UseSqlServer(connectionString));
+builder.Services.AddOptions<ChatBotApiOptions>()
+    .Bind(builder.Configuration.GetSection(ChatBotApiOptions.SectionName))
+    .Validate(options =>
+        Uri.TryCreate(options.BaseAddress, UriKind.Absolute, out var address)
+        && (address.Scheme == Uri.UriSchemeHttp || address.Scheme == Uri.UriSchemeHttps),
+        "ChatBotApi:BaseAddress must be an absolute HTTP or HTTPS URL.")
+    .Validate(options => Encoding.UTF8.GetByteCount(options.InternalApiKey) >= 32,
+        "ChatBotApi:InternalApiKey must contain at least 32 bytes.")
+    .ValidateOnStart();
 builder.Services.AddHttpClient<IReplyApiClient, ReplyApiClient>(client =>
 {
     var baseAddress = builder.Configuration["ReplyApi:BaseAddress"]
         ?? throw new InvalidOperationException("Configure ReplyApi:BaseAddress.");
     client.BaseAddress = new Uri(baseAddress);
+});
+builder.Services.AddHttpClient<IChatBotClient, ChatBotClient>((serviceProvider, client) =>
+{
+    var options = serviceProvider.GetRequiredService<
+        Microsoft.Extensions.Options.IOptions<ChatBotApiOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseAddress);
+    client.DefaultRequestHeaders.Add("X-ChatBot-Service-Key", options.InternalApiKey);
+});
+builder.Services.AddHttpClient<IChatBotReplyClient, ChatBotReplyClient>((serviceProvider, client) =>
+{
+    var options = serviceProvider.GetRequiredService<
+        Microsoft.Extensions.Options.IOptions<ChatBotApiOptions>>().Value;
+    var replyApiAddress = builder.Configuration["ReplyApi:BaseAddress"]
+        ?? throw new InvalidOperationException("Configure ReplyApi:BaseAddress.");
+    client.BaseAddress = new Uri(replyApiAddress);
+    client.DefaultRequestHeaders.Add("X-ChatBot-Service-Key", options.InternalApiKey);
 });
 builder.Services.AddHttpClient<IUserProfilesClient, UserProfilesClient>(client =>
 {
@@ -71,6 +97,9 @@ builder.Services.AddHttpClient<IUserProfilesClient, UserProfilesClient>(client =
 });
 builder.Services.AddScoped<IThreadService, ThreadService>();
 builder.Services.AddSingleton<IThreadUpdatesPublisher, ThreadUpdatesPublisher>();
+builder.Services.AddSingleton<IChatBotReplyQueue, ChatBotReplyQueue>();
+builder.Services.AddScoped<IChatBotReplyProcessor, ChatBotReplyProcessor>();
+builder.Services.AddHostedService<ChatBotReplyWorker>();
 builder.Services.AddSwaggerGen();
 builder.Services.AddOpenApi();
 

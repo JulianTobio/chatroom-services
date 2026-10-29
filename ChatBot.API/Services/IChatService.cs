@@ -4,9 +4,5 @@ namespace ChatBot.API.Services;
 
 public interface IChatService
 {
-    Task<ChatResponse> SendAsync(
-        int userId,
-        Guid conversationId,
-        string message,
-        CancellationToken cancellationToken);
+    Task<ChatResponse> SendAsync(string message, CancellationToken cancellationToken);
 }

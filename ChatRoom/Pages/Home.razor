@@ -269,13 +269,18 @@
     }
 
     private Task HandleThreadChangedAsync(int threadId, string changeType) =>
-        InvokeAsync(RefreshThreads);
+        InvokeAsync(async () =>
+        {
+            await RefreshThreads();
+            StateHasChanged();
+        });
 
     private Task HandleReconnectedAsync() =>
         InvokeAsync(async () =>
         {
             _realtimeError = null;
             await RefreshThreads();
+            StateHasChanged();
         });
 
     private void ToggleCreateForm()

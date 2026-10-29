@@ -53,6 +53,13 @@ namespace Reply.API.Service
             return ToResponse(item, profiles);
         }
 
+        public async Task<ReplyResponse> AddChatBotReplyAsync(ReplyItem item)
+        {
+            await context.Replies.AddAsync(item);
+            await context.SaveChangesAsync();
+            return ToResponse(item, []);
+        }
+
         public async Task<bool> RemoveReplyAsync(int replyId, int userId)
         {
             var reply = await context.Replies.FindAsync(replyId);

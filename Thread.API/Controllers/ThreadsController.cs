@@ -12,7 +12,9 @@ namespace Thread.API.Controllers;
 [Route("api/[controller]")]
 public class ThreadsController(
     IThreadService threadService,
-    IThreadUpdatesPublisher threadUpdatesPublisher) : ControllerBase
+    IThreadUpdatesPublisher threadUpdatesPublisher,
+    IChatBotReplyQueue chatBotReplyQueue,
+    ILogger<ThreadsController> logger) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<PagedResult<ThreadResponse>>> GetAll(
@@ -168,6 +170,15 @@ public class ThreadsController(
             if (reply is not null)
             {
                 await threadUpdatesPublisher.PublishAsync(threadId, "reply-created");
+                if (ChatBotMentionParser.TryExtractPrompt(request.Content, out var prompt)
+                    && !chatBotReplyQueue.TryEnqueue(
+                        new ChatBotReplyJob(threadId, reply.Id, prompt)))
+                {
+                    logger.LogError(
+                        "Could not enqueue chatbot mention from reply {ReplyId} in thread {ThreadId}.",
+                        reply.Id,
+                        threadId);
+                }
             }
 
             return reply is null ? NotFound() : StatusCode(StatusCodes.Status201Created, reply);

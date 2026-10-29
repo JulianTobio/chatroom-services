@@ -8,7 +8,9 @@ namespace Thread.API.Service;
 public class ThreadService(
     ThreadContext context,
     IReplyApiClient replyApiClient,
-    IUserProfilesClient userProfilesClient) : IThreadService
+    IUserProfilesClient userProfilesClient,
+    IChatBotReplyClient chatBotReplyClient,
+    IThreadUpdatesPublisher threadUpdatesPublisher) : IThreadService
 {
     public async Task<PagedResult<ThreadResponse>> GetAllAsync(int pageNumber, int pageSize)
     {
@@ -117,6 +119,39 @@ public class ThreadService(
                 $"Reply {reply.Id} was created, but thread {threadId} no longer exists to update its reply metadata.");
         }
 
+        return reply;
+    }
+
+    public async Task<ReplyApiReply?> CreateChatBotReplyAsync(
+        int threadId,
+        string content,
+        CancellationToken cancellationToken)
+    {
+        var threadExists = await context.Threads
+            .AnyAsync(thread => thread.Id == threadId, cancellationToken);
+        if (!threadExists)
+        {
+            return null;
+        }
+
+        var reply = await chatBotReplyClient.CreateAsync(threadId, content, cancellationToken);
+        var updatedRows = await context.Threads
+            .Where(thread => thread.Id == threadId)
+            .ExecuteUpdateAsync(updates => updates
+                .SetProperty(thread => thread.ReplyCount, thread => thread.ReplyCount + 1)
+                .SetProperty(
+                    thread => thread.LastReplyTimestamp,
+                    thread => thread.LastReplyTimestamp == null || thread.LastReplyTimestamp < reply.Date
+                        ? reply.Date
+                        : thread.LastReplyTimestamp),
+                cancellationToken);
+        if (updatedRows == 0)
+        {
+            throw new InvalidOperationException(
+                $"Chatbot reply {reply.Id} was created, but thread {threadId} no longer exists to update its reply metadata.");
+        }
+
+        await threadUpdatesPublisher.PublishAsync(threadId, "reply-created");
         return reply;
     }
 
