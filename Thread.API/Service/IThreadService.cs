@@ -5,11 +5,13 @@ namespace Thread.API.Service;
 
 public interface IThreadService
 {
-    Task<PagedResult<ThreadModel>> GetAllAsync(int pageNumber, int pageSize);
+    Task<PagedResult<ThreadResponse>> GetAllAsync(int pageNumber, int pageSize);
 
     Task<ThreadModel?> GetAsync(int threadId);
 
-    Task<ThreadModel> AddAsync(ThreadModel thread);
+    Task<ThreadResponse?> GetResponseAsync(int threadId);
+
+    Task<ThreadResponse> AddAsync(ThreadModel thread);
 
     Task<bool> UpdateAsync(int threadId, ThreadModel thread);
 
@@ -17,5 +19,12 @@ public interface IThreadService
 
     Task<ReplyApiReply?> CreateReplyAsync(int threadId, CreateThreadReplyRequest request);
 
-    Task<bool> DeleteReplyAsync(int threadId, int replyId);
+    Task<ReplyApiReply?> CreateChatBotReplyAsync(
+        int threadId,
+        string content,
+        CancellationToken cancellationToken);
+
+    Task<bool> DeleteReplyAsync(int threadId, int replyId, int userId);
+
+    Task<IReadOnlyList<ReplyApiReply>?> GetRepliesAsync(int threadId);
 }

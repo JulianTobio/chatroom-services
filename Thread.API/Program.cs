@@ -1,10 +1,56 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Thread.API.Data;
+using Thread.API.Hubs;
+using Thread.API.Models;
 using Thread.API.Service;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
+var jwtIssuer = builder.Configuration["Jwt:Issuer"]
+    ?? throw new InvalidOperationException("Configure Jwt:Issuer.");
+var jwtAudience = builder.Configuration["Jwt:Audience"]
+    ?? throw new InvalidOperationException("Configure Jwt:Audience.");
+var jwtSigningKey = builder.Configuration["Jwt:SigningKey"]
+    ?? throw new InvalidOperationException("Configure Jwt:SigningKey using an environment variable or user secrets.");
+if (Encoding.UTF8.GetByteCount(jwtSigningKey) < 32)
+{
+    throw new InvalidOperationException("Jwt:SigningKey must contain at least 32 bytes.");
+}
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtIssuer,
+            ValidateAudience = true,
+            ValidAudience = jwtAudience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey)),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+    });
+builder.Services.AddAuthorization();
+builder.Services.AddHttpContextAccessor();
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? throw new InvalidOperationException("Configure Cors:AllowedOrigins.");
+if (builder.Configuration["Cors:AllowedOrigins:0"] is { } frontendOrigin)
+{
+    allowedOrigins = [frontendOrigin];
+}
+
+builder.Services.AddCors(options =>
+    options.AddDefaultPolicy(policy =>
+        policy.WithOrigins(allowedOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod()));
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException(
@@ -12,13 +58,48 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 builder.Services.AddDbContext<ThreadContext>(options =>
     options.UseSqlServer(connectionString));
+builder.Services.AddOptions<ChatBotApiOptions>()
+    .Bind(builder.Configuration.GetSection(ChatBotApiOptions.SectionName))
+    .Validate(options =>
+        Uri.TryCreate(options.BaseAddress, UriKind.Absolute, out var address)
+        && (address.Scheme == Uri.UriSchemeHttp || address.Scheme == Uri.UriSchemeHttps),
+        "ChatBotApi:BaseAddress must be an absolute HTTP or HTTPS URL.")
+    .Validate(options => Encoding.UTF8.GetByteCount(options.InternalApiKey) >= 32,
+        "ChatBotApi:InternalApiKey must contain at least 32 bytes.")
+    .ValidateOnStart();
 builder.Services.AddHttpClient<IReplyApiClient, ReplyApiClient>(client =>
 {
     var baseAddress = builder.Configuration["ReplyApi:BaseAddress"]
         ?? throw new InvalidOperationException("Configure ReplyApi:BaseAddress.");
     client.BaseAddress = new Uri(baseAddress);
 });
+builder.Services.AddHttpClient<IChatBotClient, ChatBotClient>((serviceProvider, client) =>
+{
+    var options = serviceProvider.GetRequiredService<
+        Microsoft.Extensions.Options.IOptions<ChatBotApiOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseAddress);
+    client.DefaultRequestHeaders.Add("X-ChatBot-Service-Key", options.InternalApiKey);
+});
+builder.Services.AddHttpClient<IChatBotReplyClient, ChatBotReplyClient>((serviceProvider, client) =>
+{
+    var options = serviceProvider.GetRequiredService<
+        Microsoft.Extensions.Options.IOptions<ChatBotApiOptions>>().Value;
+    var replyApiAddress = builder.Configuration["ReplyApi:BaseAddress"]
+        ?? throw new InvalidOperationException("Configure ReplyApi:BaseAddress.");
+    client.BaseAddress = new Uri(replyApiAddress);
+    client.DefaultRequestHeaders.Add("X-ChatBot-Service-Key", options.InternalApiKey);
+});
+builder.Services.AddHttpClient<IUserProfilesClient, UserProfilesClient>(client =>
+{
+    var baseAddress = builder.Configuration["UsersApi:BaseAddress"]
+        ?? throw new InvalidOperationException("Configure UsersApi:BaseAddress.");
+    client.BaseAddress = new Uri(baseAddress);
+});
 builder.Services.AddScoped<IThreadService, ThreadService>();
+builder.Services.AddSingleton<IThreadUpdatesPublisher, ThreadUpdatesPublisher>();
+builder.Services.AddSingleton<IChatBotReplyQueue, ChatBotReplyQueue>();
+builder.Services.AddScoped<IChatBotReplyProcessor, ChatBotReplyProcessor>();
+builder.Services.AddHostedService<ChatBotReplyWorker>();
 builder.Services.AddSwaggerGen();
 builder.Services.AddOpenApi();
 
@@ -32,7 +113,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseCors();
+app.UseAuthentication();
 app.UseAuthorization();
+app.MapHub<ThreadUpdatesHub>("/hubs/threads");
 app.MapControllers();
 
 app.Run();

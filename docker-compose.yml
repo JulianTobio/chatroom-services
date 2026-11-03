@@ -7,9 +7,16 @@ services:
       dockerfile: Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Development
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
+      ChatBot__InternalApiKey: ${CHATBOT_INTERNAL_API_KEY:?Set CHATBOT_INTERNAL_API_KEY in .env}
+      ChatBot__UserId: ${CHATBOT_USER_ID:?Set CHATBOT_USER_ID in .env}
+      UsersApi__BaseAddress: http://users-api:8080/
       ConnectionStrings__DefaultConnection: "Data Source=host.docker.internal,1433;Database=chatReply;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;Encrypt=True"
     ports:
       - "${REPLY_API_PORT:-5025}:8080"
+    depends_on:
+      users-api:
+        condition: service_started
 
   thread-api:
     image: chatroom-thread-api:latest
@@ -18,10 +25,58 @@ services:
       dockerfile: Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__DefaultConnection: "Data Source=host.docker.internal,1433;Database=chatReply;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;Encrypt=True"
+      ConnectionStrings__DefaultConnection: "Data Source=host.docker.internal,1433;Database=chatThread;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;Encrypt=True"
       ReplyApi__BaseAddress: http://reply-api:8080/
+      UsersApi__BaseAddress: http://users-api:8080/
+      ChatBotApi__BaseAddress: http://chatbot-api:8080/
+      ChatBotApi__InternalApiKey: ${CHATBOT_INTERNAL_API_KEY:?Set CHATBOT_INTERNAL_API_KEY in .env}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
+      Cors__AllowedOrigins__0: "http://localhost:${CHATROOM_PORT:-5017}"
     ports:
       - "${THREAD_API_PORT:-5026}:8080"
     depends_on:
       reply-api:
         condition: service_started
+      users-api:
+        condition: service_started
+      chatbot-api:
+        condition: service_started
+
+  chatroom:
+    image: chatroom-web:latest
+    build:
+      context: ./ChatRoom
+      dockerfile: Dockerfile
+    ports:
+      - "${CHATROOM_PORT:-5017}:80"
+    depends_on:
+      thread-api:
+        condition: service_started
+
+  users-api:
+    image: chatroom-users-api:latest
+    build:
+      context: ./Users.API
+      dockerfile: Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Data Source=host.docker.internal,1433;Database=chatUsers;User Id=sa;Password=${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in .env};TrustServerCertificate=True;Encrypt=True"
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
+      Cors__AllowedOrigins__0: "http://localhost:${CHATROOM_PORT:-5017}"
+    ports:
+      - "${USERS_API_PORT:-5027}:8080"
+
+  chatbot-api:
+    image: chatroom-chatbot-api:latest
+    build:
+      context: ./ChatBot.API
+      dockerfile: Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
+      ChatBot__InternalApiKey: ${CHATBOT_INTERNAL_API_KEY:?Set CHATBOT_INTERNAL_API_KEY in .env}
+      ChatBot__BaseAddress: ${OLLAMA_BASE_ADDRESS:-http://host.docker.internal:11434}
+      ChatBot__Model: ${OLLAMA_MODEL:-llama3.2:3b}
+      Cors__AllowedOrigins__0: "http://localhost:${CHATROOM_PORT:-5017}"
+    ports:
+      - "${CHATBOT_API_PORT:-5028}:8080"

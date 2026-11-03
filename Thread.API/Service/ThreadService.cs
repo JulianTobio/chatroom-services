@@ -5,9 +5,14 @@ using ThreadModel = Thread.API.Models.Thread;
 
 namespace Thread.API.Service;
 
-public class ThreadService(ThreadContext context, IReplyApiClient replyApiClient) : IThreadService
+public class ThreadService(
+    ThreadContext context,
+    IReplyApiClient replyApiClient,
+    IUserProfilesClient userProfilesClient,
+    IChatBotReplyClient chatBotReplyClient,
+    IThreadUpdatesPublisher threadUpdatesPublisher) : IThreadService
 {
-    public async Task<PagedResult<ThreadModel>> GetAllAsync(int pageNumber, int pageSize)
+    public async Task<PagedResult<ThreadResponse>> GetAllAsync(int pageNumber, int pageSize)
     {
         var threads = context.Threads
             .OrderByDescending(thread => thread.Created)
@@ -17,10 +22,11 @@ public class ThreadService(ThreadContext context, IReplyApiClient replyApiClient
         var items = offset >= totalCount
             ? []
             : await threads.Skip((int)offset).Take(pageSize).ToListAsync();
+        var profiles = await userProfilesClient.GetByIdsAsync(items.Select(thread => thread.Author));
 
-        return new PagedResult<ThreadModel>
+        return new PagedResult<ThreadResponse>
         {
-            Items = items,
+            Items = items.Select(thread => ToResponse(thread, profiles)).ToList(),
             PageNumber = pageNumber,
             PageSize = pageSize,
             TotalCount = totalCount
@@ -32,11 +38,24 @@ public class ThreadService(ThreadContext context, IReplyApiClient replyApiClient
         return context.Threads.FirstOrDefaultAsync(thread => thread.Id == threadId);
     }
 
-    public async Task<ThreadModel> AddAsync(ThreadModel thread)
+    public async Task<ThreadResponse?> GetResponseAsync(int threadId)
+    {
+        var thread = await GetAsync(threadId);
+        if (thread is null)
+        {
+            return null;
+        }
+
+        var profiles = await userProfilesClient.GetByIdsAsync([thread.Author]);
+        return ToResponse(thread, profiles);
+    }
+
+    public async Task<ThreadResponse> AddAsync(ThreadModel thread)
     {
         await context.Threads.AddAsync(thread);
         await context.SaveChangesAsync();
-        return thread;
+        var profiles = await userProfilesClient.GetByIdsAsync([thread.Author]);
+        return ToResponse(thread, profiles);
     }
 
     public async Task<bool> UpdateAsync(int threadId, ThreadModel thread)
@@ -49,7 +68,6 @@ public class ThreadService(ThreadContext context, IReplyApiClient replyApiClient
 
         existingThread.Title = thread.Title;
         existingThread.Description = thread.Description;
-        existingThread.Author = thread.Author;
 
         await context.SaveChangesAsync();
         return true;
@@ -68,7 +86,9 @@ public class ThreadService(ThreadContext context, IReplyApiClient replyApiClient
         return true;
     }
 
-    public async Task<ReplyApiReply?> CreateReplyAsync(int threadId, CreateThreadReplyRequest request)
+    public async Task<ReplyApiReply?> CreateReplyAsync(
+        int threadId,
+        CreateThreadReplyRequest request)
     {
         var threadExists = await context.Threads
             .AnyAsync(thread => thread.Id == threadId);
@@ -77,7 +97,12 @@ public class ThreadService(ThreadContext context, IReplyApiClient replyApiClient
             return null;
         }
 
-        var reply = await replyApiClient.CreateAsync(threadId, request);
+        var reply = await replyApiClient.CreateAsync(
+            new ReplyApiCreateRequest
+            {
+                Content = request.Content,
+                TopicId = threadId
+            });
         var updatedRows = await context.Threads
             .Where(thread => thread.Id == threadId)
             .ExecuteUpdateAsync(updates => updates
@@ -97,7 +122,40 @@ public class ThreadService(ThreadContext context, IReplyApiClient replyApiClient
         return reply;
     }
 
-    public async Task<bool> DeleteReplyAsync(int threadId, int replyId)
+    public async Task<ReplyApiReply?> CreateChatBotReplyAsync(
+        int threadId,
+        string content,
+        CancellationToken cancellationToken)
+    {
+        var threadExists = await context.Threads
+            .AnyAsync(thread => thread.Id == threadId, cancellationToken);
+        if (!threadExists)
+        {
+            return null;
+        }
+
+        var reply = await chatBotReplyClient.CreateAsync(threadId, content, cancellationToken);
+        var updatedRows = await context.Threads
+            .Where(thread => thread.Id == threadId)
+            .ExecuteUpdateAsync(updates => updates
+                .SetProperty(thread => thread.ReplyCount, thread => thread.ReplyCount + 1)
+                .SetProperty(
+                    thread => thread.LastReplyTimestamp,
+                    thread => thread.LastReplyTimestamp == null || thread.LastReplyTimestamp < reply.Date
+                        ? reply.Date
+                        : thread.LastReplyTimestamp),
+                cancellationToken);
+        if (updatedRows == 0)
+        {
+            throw new InvalidOperationException(
+                $"Chatbot reply {reply.Id} was created, but thread {threadId} no longer exists to update its reply metadata.");
+        }
+
+        await threadUpdatesPublisher.PublishAsync(threadId, "reply-created");
+        return reply;
+    }
+
+    public async Task<bool> DeleteReplyAsync(int threadId, int replyId, int userId)
     {
         var threadExists = await context.Threads
             .AnyAsync(thread => thread.Id == threadId);
@@ -107,7 +165,7 @@ public class ThreadService(ThreadContext context, IReplyApiClient replyApiClient
         }
 
         var reply = await replyApiClient.GetAsync(replyId);
-        if (reply is null || reply.TopicId != threadId)
+        if (reply is null || reply.TopicId != threadId || reply.UserId != userId)
         {
             return false;
         }
@@ -142,4 +200,45 @@ public class ThreadService(ThreadContext context, IReplyApiClient replyApiClient
 
         return true;
     }
+
+    public async Task<IReadOnlyList<ReplyApiReply>?> GetRepliesAsync(int threadId)
+    {
+        var threadExists = await context.Threads
+            .AnyAsync(thread => thread.Id == threadId);
+        if (!threadExists)
+        {
+            return null;
+        }
+
+        const int pageSize = 100;
+        var replies = new List<ReplyApiReply>();
+        var firstPage = await replyApiClient.GetByThreadAsync(threadId, 1, pageSize);
+        replies.AddRange(firstPage.Items);
+
+        for (var pageNumber = 2; pageNumber <= firstPage.TotalPages; pageNumber++)
+        {
+            var page = await replyApiClient.GetByThreadAsync(threadId, pageNumber, pageSize);
+            replies.AddRange(page.Items);
+        }
+
+        return replies
+            .OrderBy(reply => reply.Date)
+            .ThenBy(reply => reply.Id)
+            .ToList();
+    }
+
+    private static ThreadResponse ToResponse(
+        ThreadModel thread,
+        IReadOnlyList<PublicUserProfile> profiles) =>
+        new()
+        {
+            Id = thread.Id,
+            Title = thread.Title,
+            Description = thread.Description,
+            Created = thread.Created,
+            Author = thread.Author,
+            AuthorProfile = profiles.FirstOrDefault(profile => profile.Id == thread.Author),
+            ReplyCount = thread.ReplyCount,
+            LastReplyTimestamp = thread.LastReplyTimestamp
+        };
 }
